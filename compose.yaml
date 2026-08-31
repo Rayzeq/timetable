@@ -1,6 +1,7 @@
-# requires both repositories cloned side by side:
+# requires the repositories cloned side by side:
 #   <parent>/unilim-timetable   (this repository)
 #   <parent>/unilim-edt-iut-info
+#   <parent>/rikka
 #
 # then, from this repository: docker compose up -d --build
 # the app is served on http://localhost:8080 - override with WEB_PORT.

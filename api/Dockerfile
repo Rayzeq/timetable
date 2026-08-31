@@ -1,7 +1,8 @@
-# build context must be the directory containing BOTH repositories,
+# build context must be the directory containing the repositories,
 # cloned side by side:
 #   <context>/unilim-timetable
 #   <context>/unilim-edt-iut-info
+#   <context>/rikka
 # the compose file at the repository root sets this up already.
 
 FROM rust:1-slim-bookworm AS builder
@@ -11,6 +12,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
+COPY rikka ./rikka
 COPY unilim-edt-iut-info ./unilim-edt-iut-info
 COPY unilim-timetable/api ./unilim-timetable/api
 
