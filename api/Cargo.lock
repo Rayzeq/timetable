@@ -995,7 +995,9 @@ dependencies = [
 
 [[package]]
 name = "rikka"
-version = "0.1.1"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15866089c951ecb973a4139a905a6beda0e4ce4f287a65d6d7f6c4213b830b5f"
 dependencies = [
  "form_urlencoded",
  "js-sys",
