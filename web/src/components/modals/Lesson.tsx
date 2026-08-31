@@ -1,0 +1,149 @@
+import { DateTime } from "luxon";
+import { createSignal, createMemo, Show } from "solid-js";
+import type { Component } from "solid-js";
+import { Modal } from "~/components/modals";
+import { getPersonalNotesForID, setPersonalNotesForID } from "~/stores/notes";
+import type { ITimetableLesson } from "~/types/api";
+import { getLessonDescription, getLessonContentType, getFullLessonContentType, makeLessonUniqueID } from "~/utils/lessons";
+import { shortToFullTeacherName } from "~/utils/teachers";
+
+import MdiClock from "~icons/mdi/clock";
+import MdiInformation from "~icons/mdi/information";
+import MdiTextBoxEdit from "~icons/mdi/text-box-edit";
+
+const [lessonModalData, setLessonModalData] = createSignal<ITimetableLesson | null>(null);
+export { setLessonModalData };
+
+const Field: Component<{ title: string, value: string, valueHref?: string }> = (props) => (
+  <div class="flex items-center gap-4 justify-between py-3 px-5">
+    <p class="text-[rgb(210,210,210)]">
+      {props.title}
+    </p>
+    <Show when={props.valueHref} fallback={
+      <p class="text-[rgb(230,230,230)] truncate">
+        {props.value}
+      </p>
+    }>
+      <a href={props.valueHref} class="text-[rgb(230,230,230)] border-[rgb(220,220,220)] truncate border-b hover:border-white">
+        {props.value}
+      </a>
+    </Show>
+  </div>
+);
+
+const LessonModal: Component = () => {
+  const startDate = createMemo(() => DateTime.fromISO(lessonModalData()?.start_date ?? "").setLocale("fr-FR"));
+  const endDate = createMemo(() => DateTime.fromISO(lessonModalData()?.end_date ?? "").setLocale("fr-FR"));
+  const lessonID = createMemo(() => lessonModalData() ? makeLessonUniqueID(lessonModalData()!) : null);
+  const teacher = createMemo(() => lessonModalData() ? shortToFullTeacherName(lessonModalData()!.content.teacher) : null);
+
+  const autoResize = (element: HTMLTextAreaElement) => {
+    element.style.height = "auto";
+    element.style.height = element.scrollHeight + "px";
+  };
+
+  return (
+    <Modal
+      open={lessonModalData() !== null}
+      onClose={() => setLessonModalData(null)}
+      title="Cours"
+    >
+      <Show when={lessonModalData()}
+        fallback={
+          <div>
+            <p>Fermeture en cours...</p>
+          </div>
+        }
+      >
+        {lesson => (
+          <div class="p-4 pt-2 flex flex-col gap-6">
+            <section>
+              <div class="flex gap-2 items-center mb-2">
+                <MdiInformation class="text-lg text-red" />
+                <h2 class="text-[rgb(240,240,240)] text-xl">
+                  Informations
+                </h2>
+              </div>
+
+              <div class="flex flex-col divide-y divide-[rgb(69,69,69)] bg-[rgb(38,38,38)] rounded-lg">
+                <Field
+                  title="Description"
+                  value={getLessonDescription(lesson())}
+                />
+                <Field
+                  title="Type de cours"
+                  value={getFullLessonContentType(lesson())}
+                />
+                <Field
+                  title="Ressource"
+                  value={getLessonContentType(lesson())}
+                />
+                <Field
+                  title="Enseignant(e)"
+                  value={teacher()?.name || lesson().content.teacher}
+                  valueHref={teacher() ? "mailto:" + teacher()!.email : void 0}
+                />
+                <Field
+                  title="Salle"
+                  value={lesson().content.room}
+                />
+              </div>
+            </section>
+            <section>
+              <div class="flex gap-2 items-center mb-2">
+                <MdiClock class="text-lg text-red" />
+                <h2 class="text-[rgb(240,240,240)] text-xl">
+                  Horaires
+                </h2>
+              </div>
+
+              <div class="flex flex-col divide-y divide-[rgb(69,69,69)] bg-[rgb(38,38,38)] rounded-lg">
+                <Field
+                  title="Heure de début"
+                  value={startDate().toLocaleString(DateTime.TIME_24_SIMPLE)}
+                />
+                <Field
+                  title="Heure de fin"
+                  value={endDate().toLocaleString(DateTime.TIME_24_SIMPLE)}
+                />
+                <Field
+                  title="Durée (temps)"
+                  value={endDate().diff(startDate(), ["hours", "minutes"]).toFormat("h'h'mm")}
+                />
+                <Field
+                  title="Durée (en % de la journée)"
+                  value={Math.round(endDate().diff(startDate(), "minutes").minutes / 1440 * 100) + "%"}
+                />
+              </div>
+            </section>
+            <section>
+              <div class="flex flex-col gap-2">
+                <div class="flex gap-2 items-center">
+                  <MdiTextBoxEdit class="text-lg text-red" />
+                  <h2 class="text-[rgb(240,240,240)] text-xl">
+                    Notes personnelles
+                  </h2>
+                </div>
+                <textarea
+                  class="inline-flex w-full resize-none overflow-hidden rounded-lg px-5 py-3 bg-[rgb(38,38,38)] text-[rgb(210,210,210)] outline-none focus:outline-red"
+                  value={getPersonalNotesForID(lessonID()!)}
+                  ref={(element) => queueMicrotask(() => autoResize(element))}
+                  onInput={(event) => {
+                    setPersonalNotesForID(lessonID()!, event.currentTarget.value);
+                    autoResize(event.currentTarget);
+                  }}
+                />
+                <p class="text-[rgb(120,120,120)] text-xs">
+                  Les notes sont sauvegardées localement et ne sont pas synchronisées.
+                  Si vous supprimez vos données de navigation, les notes personnelles seront supprimées.
+                </p>
+              </div>
+            </section>
+          </div>
+        )}
+      </Show>
+    </Modal>
+  );
+};
+
+export default LessonModal;
