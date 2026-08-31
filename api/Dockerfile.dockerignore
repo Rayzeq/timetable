@@ -1,11 +1,8 @@
-# the build context is the parent directory of the repositories -
+# the build context is the parent directory of both repositories -
 # only ship what the api build needs.
 *
-!rikka
 !unilim-edt-iut-info
 !unilim-timetable/api
-rikka/.git
-rikka/target
 unilim-edt-iut-info/.git
 unilim-edt-iut-info/target
 unilim-edt-iut-info/exported
