@@ -3,7 +3,8 @@
 Rust API serving merged timetables for the IUT informatique de Limoges, using the
 [`unilim-edt-iut-info`](https://code.vexcited.com/unilim/edt-iut-info) crate as data
 source - it must be cloned as a sibling of this repository since it is a path
-dependency.
+dependency, along with its [`rikka`](https://code.vexcited.com/rikka/rikka) http
+client.
 
 ## Endpoints
 
