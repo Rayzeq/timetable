@@ -1,0 +1,9 @@
+# build context is the repository root.
+*
+!package.json
+!bun.lock
+!web
+web/node_modules
+web/dist
+web/Dockerfile
+web/Dockerfile.dockerignore
