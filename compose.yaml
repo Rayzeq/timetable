@@ -1,8 +1,4 @@
-# requires both repositories cloned side by side:
-#   <parent>/unilim-timetable   (this repository)
-#   <parent>/unilim-edt-iut-info
-#
-# then, from this repository: docker compose up -d --build
+# docker compose up -d --build
 # the app is served on http://localhost:8080 - override with WEB_PORT.
 
 services:
@@ -19,8 +15,7 @@ services:
 
   api:
     build:
-      context: ..
-      dockerfile: unilim-timetable/api/Dockerfile
+      context: ./api
     restart: unless-stopped
     environment:
       CACHE_URL: redis://valkey:6379
