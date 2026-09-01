@@ -1,5 +1,5 @@
 //! two-tier json cache: an in-process memory tier backed by a
-//! redis-compatible database - valkey in the compose setup.
+//! redis-compatible database - valkey in production.
 //!
 //! the memory tier serves the hot path without any i/o and keeps the api
 //! fully functional when the database is unreachable; the database tier
