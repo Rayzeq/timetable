@@ -1,19 +1,12 @@
-# Web Timetable for Limoges - IUT, Computer Science
+## Live
 
-## API
+You can see the actual web app on <https://timetable.unilim.vexcited.com>.
 
-Publicly available at <https://edt-iut-info-limoges.vercel.app/api>, you'll find an
-OpenAPI documentation at this entry point.
+## Deploy
 
-## Development
+The stack is currently deployed on a Proxmox LXC, the full walkthrough is in
+[docs/installation/proxmox.md](docs/installation/proxmox.md).
 
-We're using `bun` as the main package manager.
-Don't forget to install the dependencies using `bun install`.
+## Contributing
 
-Fill the `MONGODB_URI` environment variable in the `.env` file.
-MongoDB is used to cache timetables to prevent requesting and extracting them too much.
-
-| Command | Description |
-| ------- | ----------- |
-| `bun dev` | Starts the server on [`localhost:3000`](http://localhost:3000/). |
-| `bun run build` | Build for production. |
+See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.

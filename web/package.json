@@ -1,0 +1,32 @@
+{
+  "name": "web",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@iconify-json/mdi": "^1.2.3",
+    "@solidjs/vite-plugin": "3.0.0-next.36",
+    "@types/luxon": "^3.7.1",
+    "typescript": "^5.9.3",
+    "unocss": "^66.6.0",
+    "unplugin-icons": "^23.0.1",
+    "vite": "^8.0.16",
+    "vite-plugin-pwa": "^1.2.0",
+    "workbox-window": "^7.4.0"
+  },
+  "dependencies": {
+    "@fontsource/poppins": "^5.2.7",
+    "@solidjs/router": "2.0.0-next.19",
+    "@solidjs/web": "2.0.0-rc.4",
+    "@unocss/reset": "^66.6.0",
+    "ics": "^3.8.1",
+    "localforage": "^1.10.0",
+    "luxon": "^3.7.2",
+    "solid-js": "2.0.0-rc.4",
+    "swiper": "^12.0.3"
+  }
+}
