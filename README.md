@@ -47,14 +47,9 @@ during development.
 
 ## Deployment with Docker Compose
 
-Clone both repositories side by side, the API builds the crate from the sibling
-checkout:
-
 ```sh
-git clone https://code.vexcited.com/unilim/timetable.git unilim-timetable
-git clone https://code.vexcited.com/unilim/edt-iut-info.git unilim-edt-iut-info
-
-cd unilim-timetable
+git clone https://code.vexcited.com/unilim/timetable.git
+cd timetable
 docker compose up -d --build
 ```
 
@@ -64,9 +59,9 @@ proxies `/api` to the `api` service, which talks to the `valkey` service.
 ## Deployment on a bare host (Proxmox LXC, ...)
 
 1. Install `valkey` (or any Redis-compatible server) from your distribution.
-2. Build the API with `cargo build --release` (with `unilim-edt-iut-info` cloned as a
-   sibling of this repository) and run `target/release/unilim-timetable-api` as a
-   service, with `CACHE_URL` pointing to your Valkey instance.
+2. Build the API with `cargo build --release` and run
+   `target/release/unilim-timetable-api` as a service, with `CACHE_URL` pointing to
+   your Valkey instance.
 3. Build the web app with `bun install && cd web && bun run build` and serve `web/dist`
    with any web server, proxying `/api` to the API - `web/nginx.conf` is a working
    example.

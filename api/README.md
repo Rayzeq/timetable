@@ -1,9 +1,8 @@
 # api
 
 Rust API serving merged timetables for the IUT informatique de Limoges, using the
-[`unilim-edt-iut-info`](https://code.vexcited.com/unilim/edt-iut-info) crate as data
-source - it must be cloned as a sibling of this repository since it is a path
-dependency.
+[`unilim-edt-iut-info`](https://crates.io/crates/unilim-edt-iut-info) crate as data
+source.
 
 ## Endpoints
 
