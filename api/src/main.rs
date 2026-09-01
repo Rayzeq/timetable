@@ -1,5 +1,6 @@
 mod cache;
 mod edt;
+mod openapi;
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -8,6 +9,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
+use utoipa::OpenApi;
+use utoipa_scalar::{Scalar, Servable};
 
 use crate::cache::Cache;
 use crate::edt::{CachedPayload, EdtError, Year};
@@ -56,10 +59,22 @@ async fn main() {
         .allow_methods([Method::GET, Method::OPTIONS])
         .allow_origin(Any);
 
+    let openapi_spec = openapi::ApiDoc::openapi();
+    let openapi_json = openapi_spec
+        .to_json()
+        .expect("failed to serialize the openapi spec");
+
     let app = axum::Router::new()
         .route("/api/health", get(health))
         .route("/api/timetables/{year}", get(timetables_meta))
         .route("/api/timetable/{year}/{week}", get(timetable_week))
+        .merge(Scalar::with_url("/api/openapi", openapi_spec))
+        .route("/api/openapi.json", get(move || {
+            let body = openapi_json.clone();
+            async move {
+                ([(header::CONTENT_TYPE, "application/json")], body).into_response()
+            }
+        }))
         .layer(cors)
         .with_state(state);
 
@@ -133,10 +148,31 @@ fn edt_failure(error: EdtError) -> Response {
     }
 }
 
+/// health probe.
+#[utoipa::path(get, path = "/api/health", tag = "meta",
+    responses(
+        (status = 200, description = "the service is up", body = openapi::HealthResponse),
+    ))]
 async fn health() -> Response {
     Json(json!({ "success": true })).into_response()
 }
 
+/// header metadata of every published week for a study year.
+#[utoipa::path(get, path = "/api/timetables/{year}", tag = "timetables",
+    params(
+        ("year" = String, Path, description = "study year - `A1`, `A2` or `A3`", example = "A1"),
+    ),
+    responses(
+        (status = 200, description = "known weeks, sorted by week number",
+            body = openapi::TimetablesMetaResponse,
+            headers(
+                ("ETag" = String, description = "fingerprint of the source files"),
+                ("Cache-Control" = String, description = "`public, no-cache` - always revalidate"),
+            )),
+        (status = 304, description = "the version matching `If-None-Match` is still current"),
+        (status = 400, description = "invalid year", body = openapi::ErrorResponse),
+        (status = 502, description = "the timetable server could not be reached", body = openapi::ErrorResponse),
+    ))]
 async fn timetables_meta(
     State(state): State<AppState>,
     Path(year): Path<String>,
@@ -152,6 +188,24 @@ async fn timetables_meta(
     }
 }
 
+/// timetable of one week, merged from every group of the study year.
+#[utoipa::path(get, path = "/api/timetable/{year}/{week}", tag = "timetables",
+    params(
+        ("year" = String, Path, description = "study year - `A1`, `A2` or `A3`", example = "A1"),
+        ("week" = i64, Path, description = "week number in the published files, `1` to `52`", example = 1),
+    ),
+    responses(
+        (status = 200, description = "merged timetable of the week",
+            body = openapi::TimetableResponse,
+            headers(
+                ("ETag" = String, description = "fingerprint of the source files"),
+                ("Cache-Control" = String, description = "`public, no-cache` - always revalidate"),
+            )),
+        (status = 304, description = "the version matching `If-None-Match` is still current"),
+        (status = 400, description = "invalid year or week", body = openapi::ErrorResponse),
+        (status = 404, description = "the week is not published", body = openapi::ErrorResponse),
+        (status = 502, description = "the timetable server could not be reached", body = openapi::ErrorResponse),
+    ))]
 async fn timetable_week(
     State(state): State<AppState>,
     Path((year, week)): Path<(String, String)>,
