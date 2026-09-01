@@ -1937,7 +1937,9 @@ checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "unilim-edt-iut-info"
-version = "3.0.0-alpha.1"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b22162f7a1953976c792856078098abe2a39d6eede1797df8c4439a083b33323"
 dependencies = [
  "chrono",
  "chrono-tz",
