@@ -98,8 +98,8 @@ fn failure(status: StatusCode, message: &str) -> Response {
     (status, Json(json!({ "success": false, "message": message }))).into_response()
 }
 
-/// nginx downgrades the etag to weak when compressing, so incoming
-/// validators are compared with the weak marker stripped.
+/// compressing reverse proxies - caddy, nginx - downgrade the etag to weak,
+/// so incoming validators are compared with the weak marker stripped.
 fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
     headers
         .get(header::IF_NONE_MATCH)
