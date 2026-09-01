@@ -1,4 +1,4 @@
-# API development
+# API
 
 ```sh
 cd api
@@ -9,13 +9,6 @@ curl http://localhost:8000/api/timetables/A1
 The full API reference is served by the API itself on
 [`/api/openapi`](http://localhost:8000/api/openapi) (Scalar UI), with the raw
 OpenAPI document on `/api/openapi.json`.
-
-Before opening a pull request:
-
-```sh
-cargo clippy    # the crate opts into pedantic lints
-cargo test
-```
 
 ## Configuration
 
@@ -53,12 +46,3 @@ i/o and keeps the API fully functional if the database is unreachable.
 The fingerprint doubles as the `ETag`: responses carry
 `Cache-Control: public, no-cache`, so clients revalidate with `If-None-Match` and
 get bodiless `304`s unless something actually changed.
-
-## Module map
-
-| File | Description |
-| ---- | ----------- |
-| `src/main.rs` | Router, handlers, etag handling, background refresher spawn. |
-| `src/edt.rs` | Listing, fetching, merging and response caching. |
-| `src/cache.rs` | The two-tier cache. |
-| `src/openapi.rs` | OpenAPI document and documentation-only schemas. |
