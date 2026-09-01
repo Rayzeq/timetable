@@ -1,37 +1,37 @@
 # Installation on Proxmox (LXC)
 
-The whole stack - Valkey, the API and nginx serving the PWA - fits in a single
-unprivileged LXC container.
+The whole stack - Valkey, the API and Caddy serving the PWA - fits in a single
+unprivileged Alpine LXC container, based on the
+[community-scripts Valkey container](https://community-scripts.org/scripts/valkey).
 
 ## 1. Create the container
 
-Download a Debian 13 template and create an unprivileged container from it, through
-the UI or the shell of the node:
+From the shell of the Proxmox node:
 
 ```sh
-pveam update
-pveam download local debian-13-standard_13.1-2_amd64.tar.zst
-
-pct create 200 local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst \
-  --hostname timetable \
-  --cores 2 --memory 1024 --swap 512 \
-  --rootfs local-lvm:8 \
-  --net0 name=eth0,bridge=vmbr0,ip=dhcp \
-  --unprivileged 1 --features nesting=1 \
-  --onboot 1
-
-pct start 200
-pct enter 200
+var_os='alpine' var_cpu=2 var_ram=2048 var_disk=8 \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/valkey.sh)"
 ```
 
-Adjust the storage, bridge and static IP to your setup. Everything below runs
-inside the container.
+The script's Alpine defaults (1 vCPU, 256 MB RAM, 1 GB disk) are enough to *run*
+the stack but not to *build* it, hence the bumped `var_*` overrides.
+
+The container comes with Valkey already running as an OpenRC service, bound to
+`0.0.0.0` with a generated password stored in `~/valkey.creds`. Since only the
+local API needs it, you can bind it back to localhost:
+
+```sh
+sed -i 's/^bind .*/bind 127.0.0.1/' /etc/valkey/valkey.conf
+rc-service valkey restart
+```
+
+Everything below runs inside the container (`pct enter <ctid>`).
 
 ## 2. Packages and toolchains
 
 ```sh
-apt update && apt upgrade -y
-apt install -y git curl unzip build-essential pkg-config libssl-dev nginx valkey-server
+apk update
+apk add git bash curl build-base pkgconf openssl-dev libstdc++ caddy
 
 # rust, for the api.
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -42,17 +42,10 @@ curl -fsSL https://bun.sh/install | bash
 export PATH="$HOME/.bun/bin:$PATH"
 ```
 
-Valkey listens on `127.0.0.1:6379` out of the box, which is exactly what the API
-expects:
-
-```sh
-systemctl enable --now valkey-server
-```
-
 ## 3. Build
 
 ```sh
-git clone https://code.vexcited.com/unilim/timetable.git /opt/timetable
+git clone https://code.vexcited.com/unilim/timetable /opt/timetable
 cd /opt/timetable
 
 # api.
@@ -66,83 +59,69 @@ cd web && APP_COMMIT_SHA=$(git rev-parse --short HEAD) bun run build && cd ..
 ## 4. The API as a service
 
 ```sh
-useradd --system --no-create-home --shell /usr/sbin/nologin timetable
+adduser -S -D -H timetable
+VALKEY_PASS=$(cat ~/valkey.creds)
 
-cat > /etc/systemd/system/timetable-api.service <<'EOF'
-[Unit]
-Description=unilim timetable api
-After=network-online.target valkey-server.service
-Wants=network-online.target
+cat > /etc/init.d/timetable-api <<EOF
+#!/sbin/openrc-run
+supervisor=supervise-daemon
+name="timetable-api"
+command="/opt/timetable/api/target/release/unilim-timetable-api"
+command_user="timetable"
+supervise_daemon_args="--env LISTEN_ADDRESS=127.0.0.1:8000 --env CACHE_URL=redis://:${VALKEY_PASS}@127.0.0.1:6379 --stdout /var/log/timetable-api.log --stderr /var/log/timetable-api.log"
 
-[Service]
-User=timetable
-ExecStart=/opt/timetable/api/target/release/unilim-timetable-api
-Environment=LISTEN_ADDRESS=127.0.0.1:8000
-Environment=CACHE_URL=redis://127.0.0.1:6379
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
+depend() {
+	need net
+	use valkey
+}
 EOF
 
-systemctl enable --now timetable-api
+chmod +x /etc/init.d/timetable-api
+rc-update add timetable-api default
+rc-service timetable-api start
+
 curl http://127.0.0.1:8000/api/health
 ```
 
 See [the API configuration](../development/api.md#configuration) for the other
 environment variables.
 
-## 5. nginx
+## 5. Caddy
 
 ```sh
-cat > /etc/nginx/sites-available/timetable <<'EOF'
-server {
-  listen 80 default_server;
-  server_name _;
+cat > /etc/caddy/Caddyfile <<'EOF'
+:80 {
+	encode gzip
+	root * /opt/timetable/web/dist
 
-  root /opt/timetable/web/dist;
-  index index.html;
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
 
-  gzip on;
-  gzip_types text/css application/javascript application/json image/svg+xml application/manifest+json;
+	# hashed assets can be cached forever.
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
 
-  location /api/ {
-    proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-
-  # hashed assets can be cached forever.
-  location /assets/ {
-    add_header Cache-Control "public, max-age=31536000, immutable";
-  }
-
-  # the service worker and entry point must always be revalidated
-  # so updates get picked up.
-  location = /sw.js {
-    add_header Cache-Control "no-cache";
-  }
-
-  location = /index.html {
-    add_header Cache-Control "no-cache";
-  }
-
-  location / {
-    try_files $uri $uri/ /index.html;
-  }
+	# everything else - the entry point and the service worker included -
+	# must always be revalidated so updates get picked up.
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
 }
 EOF
 
-ln -sf /etc/nginx/sites-available/timetable /etc/nginx/sites-enabled/timetable
-rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
+caddy validate --config /etc/caddy/Caddyfile
+rc-update add caddy default
+rc-service caddy start
 ```
 
-The app is now served on the container's IP. Put your reverse proxy or
-[certbot](https://certbot.eff.org) in front of it for HTTPS.
+The app is now served on the container's IP. If the container is directly
+reachable on ports 80/443, replacing `:80` with your domain name gets you
+automatic HTTPS from Caddy; behind another reverse proxy, keep `:80` as is.
 
 ## Updating
 
@@ -151,11 +130,12 @@ cd /opt/timetable
 git pull
 
 cd api && cargo build --release && cd ..
-systemctl restart timetable-api
+rc-service timetable-api restart
 
 bun install
 cd web && APP_COMMIT_SHA=$(git rev-parse --short HEAD) bun run build && cd ..
 ```
 
 The PWA picks the new version up on its next update check and prompts users to
-restart.
+restart. Valkey itself is updated through the community script's management menu,
+by rerunning the creation command on the node.
