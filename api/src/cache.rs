@@ -1,10 +1,3 @@
-//! two-tier json cache: an in-process memory tier backed by a
-//! redis-compatible database - valkey in production.
-//!
-//! the memory tier serves the hot path without any i/o and keeps the api
-//! fully functional when the database is unreachable; the database tier
-//! keeps the cache warm across restarts. every failure degrades to a miss.
-
 use redis::{
   Client, AsyncCommands,
   aio::{ ConnectionManager, ConnectionManagerConfig }
@@ -68,8 +61,6 @@ impl Cache {
         }
     }
 
-    /// raw string get - memory tier first, then the database, refilling the
-    /// memory tier on a database hit.
     pub async fn get_raw(&self, key: &str, ttl_seconds: u64) -> Option<Arc<str>> {
         {
             let memory = self.memory.read().await;

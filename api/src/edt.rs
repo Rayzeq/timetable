@@ -114,8 +114,6 @@ fn listing_key(main_group: u8, subgroup: u8) -> String {
     format!("edt:listing:G{main_group}{}", subgroup_letter(subgroup))
 }
 
-/// deterministic fnv-1a fingerprint of the files feeding a response -
-/// stable across processes, unlike the std hasher.
 fn fingerprint<'a>(entries: impl IntoIterator<Item = &'a ListingEntry>) -> String {
     let mut parts = entries
         .into_iter()
@@ -146,8 +144,6 @@ async fn fetch_listing_upstream(main_group: u8, subgroup: u8) -> Option<Vec<List
                 .collect(),
         ),
         Err(error) => {
-            // a missing group directory parses to an empty listing, so this
-            // is a transport-level failure.
             tracing::warn!(
                 "listing fetch failed for G{main_group}{}: {error}",
                 subgroup_letter(subgroup)
@@ -157,8 +153,7 @@ async fn fetch_listing_upstream(main_group: u8, subgroup: u8) -> Option<Vec<List
     }
 }
 
-/// cached subgroup listing, falling back to upstream on a full miss - the
-/// refresher normally keeps this warm.
+/// cached subgroup listing, falling back to upstream on a full miss
 async fn get_subgroup_listing(cache: &Cache, main_group: u8, subgroup: u8) -> Vec<ListingEntry> {
     let key = listing_key(main_group, subgroup);
     if let Some(entries) = cache.get_json::<Vec<ListingEntry>>(&key, LISTING_TTL_SECONDS).await {
@@ -252,9 +247,7 @@ pub async fn get_year_week_timetable(
     Ok(CachedPayload { etag, body: Arc::from(body) })
 }
 
-/// merge every subgroup file of a week into a single timetable. lessons
-/// shared between files - cm across the year, td within a main group -
-/// parse to identical structures, so deduplication is plain equality.
+/// merge every subgroup file of a week into a single timetable.
 async fn build_merged_timetable(
     cache: &Cache,
     week_number: i64,
@@ -335,7 +328,7 @@ pub async fn get_year_meta(cache: &Cache, year: Year) -> Result<CachedPayload, E
 }
 
 /// headers are identical across the subgroup files of a week, so a single
-/// file per week is parsed - through the same cache the merge uses.
+/// file per week is parsed.
 async fn build_year_meta(cache: &Cache, listing: Vec<ListingEntry>) -> Result<Vec<WeekMeta>, EdtError> {
     let mut weeks: BTreeMap<i64, Vec<ListingEntry>> = BTreeMap::new();
     for entry in listing {
@@ -383,9 +376,8 @@ async fn build_year_meta(cache: &Cache, listing: Vec<ListingEntry>) -> Result<Ve
     Ok(metas)
 }
 
-/// one refresher pass: refetch every subgroup listing from upstream, then
-/// rebuild whatever responses the new fingerprints invalidated. keeps every
-/// request a pure cache hit and bounds update latency to the interval.
+/// refetch every subgroup listing from upstream, then
+/// rebuild whatever responses the new fingerprints invalidated.
 pub async fn refresh_all(cache: &Cache) {
     let started = std::time::Instant::now();
 

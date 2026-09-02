@@ -1,9 +1,3 @@
-//! openapi document served on `/api/openapi` (scalar ui) and
-//! `/api/openapi.json` (raw spec).
-//!
-//! handlers answer with pre-serialized cache entries, so the schemas below
-//! exist for documentation only and mirror the wire format by hand.
-
 use utoipa::{OpenApi, ToSchema};
 
 /// kind of a lesson.
@@ -151,13 +145,8 @@ pub struct ErrorResponse {
 #[derive(OpenApi)]
 #[openapi(
     info(
-        title = "unilim-timetable-api",
-        description = "Timetables of the IUT informatique de Limoges, merged per study year \
-from the official per-subgroup `.ics` files of [edt-iut-info.unilim.fr](https://edt-iut-info.unilim.fr/edt).
-
-Responses carry an `ETag` derived from the source files and \
-`Cache-Control: public, no-cache` - revalidate with `If-None-Match` to get a \
-cheap `304 Not Modified` unless something actually changed upstream.",
+        title = "timetable.unilim.vexcited.com",
+        description = "Timetables of the IUT informatique de Limoges from the official per-subgroup `.ics` files of [edt-iut-info.unilim.fr](https://edt-iut-info.unilim.fr/edt).",
         license(name = "MIT"),
         contact(name = "Mikkel ALMONTE--RINGAUD", email = "contact@vexcited.com"),
     ),
@@ -176,8 +165,8 @@ cheap `304 Not Modified` unless something actually changed upstream.",
         ErrorResponse,
     )),
     tags(
-        (name = "timetables", description = "Merged timetables and their metadata."),
-        (name = "meta", description = "Service endpoints."),
+        (name = "Timetables", description = "Merged timetables and their metadata."),
+        (name = "Meta", description = "Service endpoints."),
     )
 )]
 pub struct ApiDoc;

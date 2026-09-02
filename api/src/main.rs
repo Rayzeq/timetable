@@ -38,22 +38,15 @@ async fn main() {
         cache: Cache::connect(&cache_url).await,
     };
 
-    // background refresher: keeps listings, parsed files and serialized
-    // responses warm so requests are pure cache hits and upstream updates
-    // land within one interval. 0 disables it.
-    let refresh_seconds = env_or("REFRESH_INTERVAL_SECONDS", "120")
-        .parse::<u64>()
-        .unwrap_or(120);
-    if refresh_seconds > 0 {
-        let cache = state.cache.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(refresh_seconds));
-            loop {
-                interval.tick().await;
-                edt::refresh_all(&cache).await;
-            }
-        });
-    }
+    // background refresher.
+    let cache = state.cache.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
+        loop {
+            interval.tick().await;
+            edt::refresh_all(&cache).await;
+        }
+    });
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::OPTIONS])
@@ -98,8 +91,6 @@ fn failure(status: StatusCode, message: &str) -> Response {
     (status, Json(json!({ "success": false, "message": message }))).into_response()
 }
 
-/// compressing reverse proxies - caddy, nginx - downgrade the etag to weak,
-/// so incoming validators are compared with the weak marker stripped.
 fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
     headers
         .get(header::IF_NONE_MATCH)
@@ -149,7 +140,7 @@ fn edt_failure(error: EdtError) -> Response {
 }
 
 /// health probe.
-#[utoipa::path(get, path = "/api/health", tag = "meta",
+#[utoipa::path(get, path = "/api/health", tag = "Meta",
     responses(
         (status = 200, description = "the service is up", body = openapi::HealthResponse),
     ))]
@@ -158,16 +149,16 @@ async fn health() -> Response {
 }
 
 /// header metadata of every published week for a study year.
-#[utoipa::path(get, path = "/api/timetables/{year}", tag = "timetables",
+#[utoipa::path(get, path = "/api/timetables/{year}", tag = "Timetables",
     params(
-        ("year" = String, Path, description = "study year - `A1`, `A2` or `A3`", example = "A1"),
+        ("year" = String, Path, description = "study year", example = "A1"),
     ),
     responses(
         (status = 200, description = "known weeks, sorted by week number",
             body = openapi::TimetablesMetaResponse,
             headers(
                 ("ETag" = String, description = "fingerprint of the source files"),
-                ("Cache-Control" = String, description = "`public, no-cache` - always revalidate"),
+                ("Cache-Control" = String, description = "`public, no-cache`, always revalidate"),
             )),
         (status = 304, description = "the version matching `If-None-Match` is still current"),
         (status = 400, description = "invalid year", body = openapi::ErrorResponse),
@@ -189,17 +180,17 @@ async fn timetables_meta(
 }
 
 /// timetable of one week, merged from every group of the study year.
-#[utoipa::path(get, path = "/api/timetable/{year}/{week}", tag = "timetables",
+#[utoipa::path(get, path = "/api/timetable/{year}/{week}", tag = "Timetables",
     params(
-        ("year" = String, Path, description = "study year - `A1`, `A2` or `A3`", example = "A1"),
-        ("week" = i64, Path, description = "week number in the published files, `1` to `52`", example = 1),
+        ("year" = String, Path, description = "study year", example = "A1"),
+        ("week" = i64, Path, description = "week number in the published files", example = 1),
     ),
     responses(
         (status = 200, description = "merged timetable of the week",
             body = openapi::TimetableResponse,
             headers(
                 ("ETag" = String, description = "fingerprint of the source files"),
-                ("Cache-Control" = String, description = "`public, no-cache` - always revalidate"),
+                ("Cache-Control" = String, description = "`public, no-cache`, always revalidate"),
             )),
         (status = 304, description = "the version matching `If-None-Match` is still current"),
         (status = 400, description = "invalid year or week", body = openapi::ErrorResponse),
