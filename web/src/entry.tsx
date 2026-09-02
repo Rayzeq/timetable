@@ -1,5 +1,4 @@
 /* @refresh reload */
-import "@unocss/reset/tailwind.css";
 import "@fontsource/poppins/400.css";
 import "@fontsource/poppins/500.css";
 import "@fontsource/poppins/600.css";
@@ -42,7 +41,7 @@ render(() => {
 
   createEffect(() => [primaryColor(), primaryColorHEX()] as const, ([color, hex]) => {
     const root = document.querySelector(":root") as HTMLElement;
-    root.style.setProperty("--custom-color", color);
+    root.style.setProperty("--custom-color", `rgb(${color})`);
 
     document.querySelector('meta[name="theme-color"]')
       ?.setAttribute("content", rgbToHex(...hex));

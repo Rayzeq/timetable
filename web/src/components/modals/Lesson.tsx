@@ -11,8 +11,14 @@ import MdiClock from "~icons/mdi/clock";
 import MdiInformation from "~icons/mdi/information";
 import MdiTextBoxEdit from "~icons/mdi/text-box-edit";
 
-const [lessonModalData, setLessonModalData] = createSignal<ITimetableLesson | null>(null);
-export { setLessonModalData };
+const [lesson, setLesson] = createSignal<ITimetableLesson | null>(null);
+const [open, setOpen] = createSignal(false);
+
+/** the lesson is kept while the modal plays its exit transition. */
+export const setLessonModalData = (data: ITimetableLesson) => {
+  setLesson(data);
+  setOpen(true);
+};
 
 const Field: Component<{ title: string, value: string, valueHref?: string }> = (props) => (
   <div class="flex items-center gap-4 justify-between py-3 px-5">
@@ -32,10 +38,10 @@ const Field: Component<{ title: string, value: string, valueHref?: string }> = (
 );
 
 const LessonModal: Component = () => {
-  const startDate = createMemo(() => DateTime.fromISO(lessonModalData()?.start_date ?? "").setLocale("fr-FR"));
-  const endDate = createMemo(() => DateTime.fromISO(lessonModalData()?.end_date ?? "").setLocale("fr-FR"));
-  const lessonID = createMemo(() => lessonModalData() ? makeLessonUniqueID(lessonModalData()!) : null);
-  const teacher = createMemo(() => lessonModalData() ? shortToFullTeacherName(lessonModalData()!.content.teacher) : null);
+  const startDate = createMemo(() => DateTime.fromISO(lesson()?.start_date ?? "").setLocale("fr-FR"));
+  const endDate = createMemo(() => DateTime.fromISO(lesson()?.end_date ?? "").setLocale("fr-FR"));
+  const lessonID = createMemo(() => lesson() ? makeLessonUniqueID(lesson()!) : null);
+  const teacher = createMemo(() => lesson() ? shortToFullTeacherName(lesson()!.content.teacher) : null);
 
   const autoResize = (element: HTMLTextAreaElement) => {
     element.style.height = "auto";
@@ -44,17 +50,11 @@ const LessonModal: Component = () => {
 
   return (
     <Modal
-      open={lessonModalData() !== null}
-      onClose={() => setLessonModalData(null)}
+      open={open()}
+      onClose={() => setOpen(false)}
       title="Cours"
     >
-      <Show when={lessonModalData()}
-        fallback={
-          <div>
-            <p>Fermeture en cours...</p>
-          </div>
-        }
-      >
+      <Show when={lesson()}>
         {lesson => (
           <div class="p-4 pt-2 flex flex-col gap-6">
             <section>

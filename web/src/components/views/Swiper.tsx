@@ -3,7 +3,9 @@ import type { Component, Setter } from "solid-js";
 import type { ITimetableHeader } from "~/types/api";
 import type { IClientLesson } from "~/types/client";
 import { createMediaQuery } from "~/primitives/media";
+import { createPresence } from "~/primitives/presence";
 import { createWindowSize } from "~/primitives/window-size";
+import { DropdownMenu } from "@kobalte/core/dropdown-menu";
 import { DateTime } from "luxon";
 
 import MdiFileDocumentAlertOutline from "~icons/mdi/file-document-alert-outline";
@@ -92,7 +94,8 @@ const SwiperView: Component<{
     : "(calcul en cours...)";
 
   const [pdfMenuOpen, setPdfMenuOpen] = createSignal(false);
-  let pdfMenuRef: HTMLDivElement | undefined;
+  const [pdfMenuContent, setPdfMenuContent] = createSignal<HTMLElement>();
+  const pdfMenuMounted = createPresence(pdfMenuOpen, () => [pdfMenuContent()]);
 
   // the official pdfs exist at three levels of detail.
   const pdfMenuEntries = () => {
@@ -111,26 +114,6 @@ const SwiperView: Component<{
       { label: "EDT du sous-groupe", name: subgroup.toUpperCase(), url: `${base}/${subgroup}/${subgroup}_${week}.pdf` }
     ];
   };
-
-  createEffect(() => pdfMenuOpen(), (open) => {
-    if (!open) return;
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node) || !pdfMenuRef?.contains(event.target)) {
-        setPdfMenuOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPdfMenuOpen(false);
-    };
-
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  });
 
   const goToPreviousWeek = () => {
     // prevent to go into negative weeks
@@ -266,8 +249,7 @@ const SwiperView: Component<{
 
   return (
     <>
-      {/* raised above the sticky widget while the pdf menu is open. */}
-      <header class={["relative p-4 pb-2 bg-red flex justify-between items-center", pdfMenuOpen() ? "z-60" : "z-20"]}
+      <header class="relative z-20 p-4 pb-2 bg-red flex justify-between items-center"
         style={{ color: textColorOnBG() }}
       >
         <div class="flex flex-col">
@@ -284,33 +266,32 @@ const SwiperView: Component<{
           </a>
 
           <Show when={props.header && typeof props.lessons !== "undefined"}>
-            <div class="relative" ref={pdfMenuRef}>
-              <button type="button"
-                class="flex items-center justify-center p-2"
-                aria-label="Télécharger l'EDT en PDF"
-                aria-haspopup="menu"
-                aria-expanded={pdfMenuOpen() ? "true" : "false"}
-                onClick={() => setPdfMenuOpen(open => !open)}
-              >
+            <DropdownMenu placement="bottom-end" gutter={4}
+              open={pdfMenuOpen()}
+              onOpenChange={setPdfMenuOpen}
+              forceMount={pdfMenuMounted()}
+            >
+              <DropdownMenu.Trigger class="flex items-center justify-center p-2" aria-label="Télécharger l'EDT en PDF">
                 <MdiFilePdfBox class="text-lg" />
-              </button>
+              </DropdownMenu.Trigger>
 
-              <Show when={pdfMenuOpen()}>
-                <div role="menu" class="animate-scale-in animate-duration-150 absolute right-0 top-full mt-1 z-50 w-60 py-1 bg-[rgb(32,32,32)] rounded-lg shadow-xl text-[rgb(220,220,220)]">
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content ref={setPdfMenuContent}
+                  class="z-50 w-60 py-1 bg-[rgb(32,32,32)] rounded-lg shadow-xl text-[rgb(220,220,220)] outline-none origin-[var(--kb-menu-content-transform-origin)] animate-kb-scale"
+                >
                   <For each={pdfMenuEntries()}>
                     {(entry) => (
-                      <a role="menuitem" href={entry.url} target="_blank" rel="noopener"
-                        class="flex items-center justify-between gap-4 px-4 py-2 text-sm hover:bg-[rgb(42,42,42)]"
-                        onClick={() => setPdfMenuOpen(false)}
+                      <DropdownMenu.Item as="a" href={entry.url} target="_blank" rel="noopener"
+                        class="flex items-center justify-between gap-4 px-4 py-2 text-sm outline-none cursor-pointer data-[highlighted]:bg-[rgb(42,42,42)]"
                       >
                         {entry.label}
                         <span class="text-red font-medium">{entry.name}</span>
-                      </a>
+                      </DropdownMenu.Item>
                     )}
                   </For>
-                </div>
-              </Show>
-            </div>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu>
           </Show>
           <Show when={props.header && typeof props.lessons !== "undefined"}>
             <button type="button"

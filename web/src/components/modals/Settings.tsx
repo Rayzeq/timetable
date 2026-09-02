@@ -70,7 +70,7 @@ export const SettingsModal: Component<{ open: boolean, setOpen: Setter<boolean> 
   return (
     <Modal title="Paramètres"
       open={props.open}
-      setOpen={props.setOpen}
+      onClose={() => props.setOpen(false)}
     >
       <div class="p-4 flex flex-col gap-6">
         <section>
