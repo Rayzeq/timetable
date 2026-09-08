@@ -3,7 +3,7 @@ mod edt;
 mod openapi;
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::{HeaderMap, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
@@ -13,7 +13,7 @@ use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable};
 
 use crate::cache::Cache;
-use crate::edt::{CachedPayload, EdtError, Year};
+use crate::edt::{CachedPayload, EdtError};
 
 #[derive(Clone)]
 struct AppState {
@@ -28,8 +28,7 @@ fn env_or(key: &str, default: &str) -> String {
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -38,18 +37,15 @@ async fn main() {
         cache: Cache::connect(&cache_url).await,
     };
 
-    // background refresher.
-    let cache = state.cache.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
-        loop {
-            interval.tick().await;
-            edt::refresh_all(&cache).await;
-        }
-    });
-
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::OPTIONS])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::IF_NONE_MATCH,
+            header::HeaderName::from_static("x-username"),
+            header::HeaderName::from_static("x-password"),
+        ])
         .allow_origin(Any);
 
     let openapi_spec = openapi::ApiDoc::openapi();
@@ -59,15 +55,15 @@ async fn main() {
 
     let app = axum::Router::new()
         .route("/api/health", get(health))
-        .route("/api/timetables/{year}", get(timetables_meta))
-        .route("/api/timetable/{year}/{week}", get(timetable_week))
+        .route("/api/timetable", get(timetable_endpoint))
         .merge(Scalar::with_url("/api/openapi", openapi_spec))
-        .route("/api/openapi.json", get(move || {
-            let body = openapi_json.clone();
-            async move {
-                ([(header::CONTENT_TYPE, "application/json")], body).into_response()
-            }
-        }))
+        .route(
+            "/api/openapi.json",
+            get(move || {
+                let body = openapi_json.clone();
+                async move { ([(header::CONTENT_TYPE, "application/json")], body).into_response() }
+            }),
+        )
         .layer(cors)
         .with_state(state);
 
@@ -88,7 +84,11 @@ async fn shutdown_signal() {
 }
 
 fn failure(status: StatusCode, message: &str) -> Response {
-    (status, Json(json!({ "success": false, "message": message }))).into_response()
+    (
+        status,
+        Json(json!({ "success": false, "message": message })),
+    )
+        .into_response()
 }
 
 fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
@@ -125,15 +125,14 @@ fn success(headers: &HeaderMap, payload: &CachedPayload) -> Response {
 
 fn edt_failure(error: EdtError) -> Response {
     match error {
-        EdtError::NotFound => failure(
-            StatusCode::NOT_FOUND,
-            "Timetable not found, are you sure this week has been published?",
-        ),
+        EdtError::NotFound => failure(StatusCode::NOT_FOUND, "Timetable not found"),
         EdtError::Upstream(message) => {
             tracing::error!("upstream failure: {message}");
             failure(
                 StatusCode::BAD_GATEWAY,
-                "The timetable server could not be reached, please try again later.",
+                &format!(
+                    "The timetable server could not be reached or authentication failed: {message}"
+                ),
             )
         }
     }
@@ -148,71 +147,39 @@ async fn health() -> Response {
     Json(json!({ "success": true })).into_response()
 }
 
-/// header metadata of every published week for a study year.
-#[utoipa::path(get, path = "/api/timetables/{year}", tag = "Timetables",
-    params(
-        ("year" = String, Path, description = "study year", example = "A1"),
-    ),
+/// user timetable endpoint.
+#[utoipa::path(get, path = "/api/timetable", tag = "Timetable",
     responses(
-        (status = 200, description = "known weeks, sorted by week number",
-            body = openapi::TimetablesMetaResponse,
-            headers(
-                ("ETag" = String, description = "fingerprint of the source files"),
-                ("Cache-Control" = String, description = "`public, no-cache`, always revalidate"),
-            )),
-        (status = 304, description = "the version matching `If-None-Match` is still current"),
-        (status = 400, description = "invalid year", body = openapi::ErrorResponse),
-        (status = 502, description = "the timetable server could not be reached", body = openapi::ErrorResponse),
-    ))]
-async fn timetables_meta(
-    State(state): State<AppState>,
-    Path(year): Path<String>,
-    headers: HeaderMap,
-) -> Response {
-    let Some(year) = Year::parse(&year) else {
-        return failure(StatusCode::BAD_REQUEST, "Year must be one of A1, A2, A3.");
-    };
-
-    match edt::get_year_meta(&state.cache, year).await {
-        Ok(payload) => success(&headers, &payload),
-        Err(error) => edt_failure(error),
-    }
-}
-
-/// timetable of one week, merged from every group of the study year.
-#[utoipa::path(get, path = "/api/timetable/{year}/{week}", tag = "Timetables",
-    params(
-        ("year" = String, Path, description = "study year", example = "A1"),
-        ("week" = i64, Path, description = "week number in the published files", example = 1),
-    ),
-    responses(
-        (status = 200, description = "merged timetable of the week",
+        (status = 200, description = "user timetable events",
             body = openapi::TimetableResponse,
             headers(
-                ("ETag" = String, description = "fingerprint of the source files"),
+                ("ETag" = String, description = "fingerprint of the payload"),
                 ("Cache-Control" = String, description = "`public, no-cache`, always revalidate"),
             )),
-        (status = 304, description = "the version matching `If-None-Match` is still current"),
-        (status = 400, description = "invalid year or week", body = openapi::ErrorResponse),
-        (status = 404, description = "the week is not published", body = openapi::ErrorResponse),
+        (status = 400, description = "invalid credentials", body = openapi::ErrorResponse),
         (status = 502, description = "the timetable server could not be reached", body = openapi::ErrorResponse),
     ))]
-async fn timetable_week(
-    State(state): State<AppState>,
-    Path((year, week)): Path<(String, String)>,
-    headers: HeaderMap,
-) -> Response {
-    let Some(year) = Year::parse(&year) else {
-        return failure(StatusCode::BAD_REQUEST, "Year must be one of A1, A2, A3.");
-    };
-    let Ok(week) = week.parse::<i64>() else {
-        return failure(StatusCode::BAD_REQUEST, "Week must be a number.");
-    };
-    if !(1..=52).contains(&week) {
-        return failure(StatusCode::BAD_REQUEST, "Week must be between 1 and 52.");
+async fn timetable_endpoint(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let username = headers
+        .get("x-username")
+        .and_then(|v| v.to_str().ok())
+        .map(ToOwned::to_owned)
+        .unwrap_or_default();
+
+    let password = headers
+        .get("x-password")
+        .and_then(|v| v.to_str().ok())
+        .map(ToOwned::to_owned)
+        .unwrap_or_default();
+
+    if username.is_empty() || password.is_empty() {
+        return failure(
+            StatusCode::BAD_REQUEST,
+            "Username and password are required headers (x-username, x-password).",
+        );
     }
 
-    match edt::get_year_week_timetable(&state.cache, year, week).await {
+    match edt::get_user_timetable(&state.cache, &username, &password).await {
         Ok(payload) => success(&headers, &payload),
         Err(error) => edt_failure(error),
     }
