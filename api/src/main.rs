@@ -1,19 +1,18 @@
 mod cache;
 mod edt;
-mod openapi;
 
-use axum::Json;
-use axum::extract::State;
-use axum::http::{HeaderMap, Method, StatusCode, header};
-use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::{
+    Json,
+    extract::State,
+    http::{HeaderMap, Method, StatusCode, header},
+    response::{IntoResponse, Response},
+    routing::get,
+};
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
-use utoipa::OpenApi;
-use utoipa_scalar::{Scalar, Servable};
 
-use crate::cache::Cache;
-use crate::edt::{CachedPayload, EdtError};
+use cache::Cache;
+use edt::{CachedPayload, Error};
 
 #[derive(Clone)]
 struct AppState {
@@ -32,9 +31,8 @@ async fn main() {
         )
         .init();
 
-    let cache_url = env_or("CACHE_URL", "redis://127.0.0.1:6379");
     let state = AppState {
-        cache: Cache::connect(&cache_url).await,
+        cache: Cache::new(),
     };
 
     let cors = CorsLayer::new()
@@ -48,22 +46,8 @@ async fn main() {
         ])
         .allow_origin(Any);
 
-    let openapi_spec = openapi::ApiDoc::openapi();
-    let openapi_json = openapi_spec
-        .to_json()
-        .expect("failed to serialize the openapi spec");
-
     let app = axum::Router::new()
-        .route("/api/health", get(health))
         .route("/api/timetable", get(timetable_endpoint))
-        .merge(Scalar::with_url("/api/openapi", openapi_spec))
-        .route(
-            "/api/openapi.json",
-            get(move || {
-                let body = openapi_json.clone();
-                async move { ([(header::CONTENT_TYPE, "application/json")], body).into_response() }
-            }),
-        )
         .layer(cors)
         .with_state(state);
 
@@ -123,42 +107,6 @@ fn success(headers: &HeaderMap, payload: &CachedPayload) -> Response {
         .into_response()
 }
 
-fn edt_failure(error: EdtError) -> Response {
-    match error {
-        EdtError::NotFound => failure(StatusCode::NOT_FOUND, "Timetable not found"),
-        EdtError::Upstream(message) => {
-            tracing::error!("upstream failure: {message}");
-            failure(
-                StatusCode::BAD_GATEWAY,
-                &format!(
-                    "The timetable server could not be reached or authentication failed: {message}"
-                ),
-            )
-        }
-    }
-}
-
-/// health probe.
-#[utoipa::path(get, path = "/api/health", tag = "Meta",
-    responses(
-        (status = 200, description = "the service is up", body = openapi::HealthResponse),
-    ))]
-async fn health() -> Response {
-    Json(json!({ "success": true })).into_response()
-}
-
-/// user timetable endpoint.
-#[utoipa::path(get, path = "/api/timetable", tag = "Timetable",
-    responses(
-        (status = 200, description = "user timetable events",
-            body = openapi::TimetableResponse,
-            headers(
-                ("ETag" = String, description = "fingerprint of the payload"),
-                ("Cache-Control" = String, description = "`public, no-cache`, always revalidate"),
-            )),
-        (status = 400, description = "invalid credentials", body = openapi::ErrorResponse),
-        (status = 502, description = "the timetable server could not be reached", body = openapi::ErrorResponse),
-    ))]
 async fn timetable_endpoint(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let username = headers
         .get("x-username")
@@ -181,6 +129,9 @@ async fn timetable_endpoint(State(state): State<AppState>, headers: HeaderMap) -
 
     match edt::get_user_timetable(&state.cache, &username, &password).await {
         Ok(payload) => success(&headers, &payload),
-        Err(error) => edt_failure(error),
+        Err(error) => failure(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("Server error: {error}"),
+        ),
     }
 }
