@@ -1,40 +1,42 @@
 import { createStore } from "solid-js";
 import { textColorOnCustomBackground } from "~/utils/colors";
-import { getYearFromMainGroup } from "~/utils/groups";
 import { safelyGetInLocalStorage } from "~/utils/localstorage";
 
 interface UserCustomization {
-  primary_color?: string
-  use_fixed_height?: boolean
+  primary_color?: string;
+  use_fixed_height?: boolean;
 }
 
 export const DEFAULT_USER_CUSTOMIZATION: Required<UserCustomization> = {
   primary_color: "255, 66, 66",
-  use_fixed_height: false
+  use_fixed_height: false,
 };
 
 export const [preferences, setPreferences] = createStore({
-  main_group: parseInt(safelyGetInLocalStorage("main_group", "1")),
-  sub_group: parseInt(safelyGetInLocalStorage("sub_group", "0")) as 0 | 1,
+  username: safelyGetInLocalStorage("username", ""),
+  password: safelyGetInLocalStorage("password", ""),
   customization: JSON.parse(safelyGetInLocalStorage("user_customization", "{}")) as UserCustomization,
 });
 
-/** year derived from the main group, ex.: G4 is second year. */
-export const getUserYear = (): number => getYearFromMainGroup(preferences.main_group);
-
-export const setMainGroup = (main_group: number) => {
-  localStorage.setItem("main_group", main_group.toString());
-  setPreferences((state) => { state.main_group = main_group; });
+export const setUsername = (username: string) => {
+  localStorage.setItem("username", username);
+  setPreferences((state) => {
+    state.username = username;
+  });
 };
 
-export const setSubGroup = (sub_group: 0 | 1) => {
-  localStorage.setItem("sub_group", sub_group.toString());
-  setPreferences((state) => { state.sub_group = sub_group; });
+export const setPassword = (password: string) => {
+  localStorage.setItem("password", password);
+  setPreferences((state) => {
+    state.password = password;
+  });
 };
 
 export const setUserCustomization = (customization: UserCustomization) => {
   localStorage.setItem("user_customization", JSON.stringify(customization));
-  setPreferences((state) => { state.customization = customization; });
+  setPreferences((state) => {
+    state.customization = customization;
+  });
 };
 
 /**

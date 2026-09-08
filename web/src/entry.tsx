@@ -18,13 +18,11 @@ import { initializeNowRefresh } from "~/stores/temporary";
 import { rgbToHex } from "~/utils/colors";
 
 import Home from "./routes/index";
-import Rooms from "./routes/rooms";
 import Error404 from "./routes/404";
 
 const Router = createRouter({
   routes: [
     defineRoute({ path: "/", component: Home }),
-    defineRoute({ path: "/rooms", component: Rooms }),
     defineRoute({ path: "*404", component: Error404 })
   ]
 });
