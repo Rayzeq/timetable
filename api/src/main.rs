@@ -12,7 +12,7 @@ use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
 
 use cache::Cache;
-use edt::{CachedPayload, Error};
+use edt::CachedPayload;
 
 #[derive(Clone)]
 struct AppState {
