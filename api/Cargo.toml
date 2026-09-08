@@ -6,17 +6,18 @@ license = "MIT"
 publish = false
 
 [dependencies]
-unilim-edt-iut-info = "1.0.0"
 axum = "0.8"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+futures = "0.3"
+redis = { version = "0.32", default-features = false, features = ["tokio-comp", "connection-manager"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls", "cookies", "form"] }
+scraper = "0.27.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-chrono = { version = "0.4", default-features = false, features = ["std"] }
-redis = { version = "0.32", default-features = false, features = ["tokio-comp", "connection-manager"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 tower-http = { version = "0.6", features = ["cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-futures = "0.3"
 utoipa = { version = "5", features = ["axum_extras"] }
 utoipa-scalar = { version = "0.3", features = ["axum"] }
 
