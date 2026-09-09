@@ -1,58 +1,27 @@
-mod cache;
 mod edt;
 
 use axum::{
     Json,
-    extract::State,
-    http::{HeaderMap, Method, StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
     routing::get,
 };
 use serde_json::json;
-use tower_http::cors::{Any, CorsLayer};
+use tokio::net::TcpListener;
 
-use cache::Cache;
 use edt::CachedPayload;
-
-#[derive(Clone)]
-struct AppState {
-    cache: Cache,
-}
-
-fn env_or(key: &str, default: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| default.to_owned())
-}
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
 
-    let state = AppState {
-        cache: Cache::new(),
-    };
+    let app = axum::Router::new().route("/api/timetable", get(timetable_endpoint));
 
-    let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::OPTIONS])
-        .allow_headers([
-            header::CONTENT_TYPE,
-            header::AUTHORIZATION,
-            header::IF_NONE_MATCH,
-            header::HeaderName::from_static("x-username"),
-            header::HeaderName::from_static("x-password"),
-        ])
-        .allow_origin(Any);
-
-    let app = axum::Router::new()
-        .route("/api/timetable", get(timetable_endpoint))
-        .layer(cors)
-        .with_state(state);
-
-    let address = env_or("LISTEN_ADDRESS", "0.0.0.0:8000");
-    let listener = tokio::net::TcpListener::bind(&address)
+    let address = "0.0.0.0:8000";
+    let listener = TcpListener::bind(address)
         .await
         .expect("failed to bind the listen address");
 
@@ -107,7 +76,7 @@ fn success(headers: &HeaderMap, payload: &CachedPayload) -> Response {
         .into_response()
 }
 
-async fn timetable_endpoint(State(state): State<AppState>, headers: HeaderMap) -> Response {
+async fn timetable_endpoint(headers: HeaderMap) -> Response {
     let username = headers
         .get("x-username")
         .and_then(|v| v.to_str().ok())
@@ -127,7 +96,7 @@ async fn timetable_endpoint(State(state): State<AppState>, headers: HeaderMap) -
         );
     }
 
-    match edt::get_user_timetable(&state.cache, &username, &password).await {
+    match edt::get_user_timetable(&username, &password).await {
         Ok(payload) => success(&headers, &payload),
         Err(error) => failure(
             StatusCode::INTERNAL_SERVER_ERROR,

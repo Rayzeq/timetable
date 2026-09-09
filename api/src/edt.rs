@@ -1,12 +1,8 @@
 use core::fmt;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::collections::HashMap;
 
 use reqwest::{Client, redirect::Policy};
 use serde::{Deserialize, Serialize};
-
-use crate::cache::Cache;
-
-const CACHE_TTL: Duration = Duration::from_mins(15);
 
 #[derive(Debug, Clone, Deserialize)]
 struct UpstreamEventsResponse {
@@ -29,7 +25,7 @@ struct Event {
 
 pub struct CachedPayload {
     pub etag: String,
-    pub body: Arc<str>,
+    pub body: String,
 }
 
 #[derive(Debug)]
@@ -181,27 +177,14 @@ async fn fetch_events(
     Ok((full_name.to_owned(), events))
 }
 
-pub async fn get_user_timetable(
-    cache: &Cache,
-    username: &str,
-    password: &str,
-) -> Result<CachedPayload, Error> {
-    let cache_key = format!("edt:user:{username}");
-    if let Some(body) = cache.get(&cache_key).await {
-        let etag = compute_etag(&body);
-        return Ok(CachedPayload { etag, body });
-    }
-
+pub async fn get_user_timetable(username: &str, password: &str) -> Result<CachedPayload, Error> {
     let (name, events) = fetch_events(username, password).await?;
-    let body_str = serde_json::to_string(&EventsResponse {
+    let body = serde_json::to_string(&EventsResponse {
         name,
         events: events.results,
     })
     .map_err(|e| Error(e.to_string()))?;
-    let body: Arc<str> = Arc::from(body_str);
     let etag = compute_etag(&body);
-
-    cache.set(&cache_key, &body, CACHE_TTL).await;
 
     Ok(CachedPayload { etag, body })
 }
