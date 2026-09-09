@@ -69,26 +69,8 @@ const Lesson: Component<{
 				]}
 				onClick={() => setLessonModalData(props.lesson)}
 			>
-				<div class="w-full flex justify-between px-3 pt-2 gap-2 overflow-hidden">
-					<div class="flex flex-col gap-0.5 min-w-0 flex-1 text-left">
-						<p
-							class={[
-								"text-[rgb(240,240,240)] text-left break-words font-medium",
-								props.durationLength > 1 ? "text-sm" : "text-xs",
-								isCancelled() && "line-through opacity-80",
-							]}
-						>
-							<span class="text-red font-medium">{props.lesson.type}</span> :{" "}
-							{lessonName()}
-						</p>
-						<Show when={description() && props.durationLength > 1}>
-							<p class="text-xs text-[rgb(170,170,170)] text-left truncate">
-								{description()}
-							</p>
-						</Show>
-					</div>
-
-					<div class="flex gap-1.5 pt-2px flex-shrink-0 items-center">
+				<div class="px-3 pt-2 flex-1 overflow-hidden">
+					<div class="flex gap-1.5 pt-2px flex-shrink-0 flex-wrap items-center justify-right float-right max-w-[100%]">
 						<Show when={isCancelled()}>
 							<p class="text-[10px] border border-red text-red bg-red/20 rounded px-1 py-0.5 font-bold">
 								ANNULÉ
@@ -100,7 +82,7 @@ const Lesson: Component<{
 						<Show when={props.lesson.content.room}>
 							<p
 								class={[
-									"bg-red rounded-full font-medium px-3 h-fit truncate max-w-[120px]",
+									"bg-red rounded-full font-medium px-3 h-fit truncate max-w-[min(100%,120px)]",
 									props.durationLength > 1 ? "text-sm py-.5" : "text-xs py-0",
 								]}
 								style={{ color: textColorOnBG() }}
@@ -109,6 +91,21 @@ const Lesson: Component<{
 							</p>
 						</Show>
 					</div>
+					<p
+						class={[
+							"text-[rgb(240,240,240)] text-left break-words font-medium",
+							props.durationLength > 1 ? "text-sm" : "text-xs",
+							isCancelled() && "line-through opacity-80",
+						]}
+					>
+						<span class="text-red font-medium">{props.lesson.type}</span> :{" "}
+						{lessonName()}
+					</p>
+					<Show when={description() && props.durationLength > 1}>
+						<p class="text-xs text-[rgb(170,170,170)] text-left text-wrap">
+							{description()}
+						</p>
+					</Show>
 				</div>
 			</button>
 		</div>

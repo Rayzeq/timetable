@@ -1,78 +1,81 @@
-import type { IClientLesson } from "~/types/client";
-import { Show } from "solid-js";
-import type { Component } from "solid-js";
 import { DateTime } from "luxon";
-
-import MdiCheck from "~icons/mdi/check";
+import type { Component } from "solid-js";
+import { Show } from "solid-js";
+import type { IClientLesson } from "~/types/client";
+import { getLessonContentType, getLessonDescription } from "~/utils/lessons";
 import MdiCalendar from "~icons/mdi/calendar";
-
-import {
-  getLessonDescription,
-  getLessonContentType
-} from "~/utils/lessons";
-import { shortToFullTeacherName } from "~/utils/teachers";
+import MdiCheck from "~icons/mdi/check";
 
 // When the day is over.
 export interface IDoneForTodayWidget {
-  type: "DONE_FOR_TODAY",
-  /**
-   * First lesson of the next day, to preview it quickly.
-   * May be `undefined` if there's no lesson for the next day.
-   */
-  next_lesson?: IClientLesson;
+	type: "DONE_FOR_TODAY";
+	/**
+	 * First lesson of the next day, to preview it quickly.
+	 * May be `undefined` if there's no lesson for the next day.
+	 */
+	next_lesson?: IClientLesson;
 }
 
 const NextLessonPreview: Component<{
-  next_lesson: IClientLesson;
+	next_lesson: IClientLesson;
 }> = (props) => {
-  const nextDateTime = () => DateTime.fromMillis(props.next_lesson.start_ts).setLocale("fr");
-  const farString = () => nextDateTime().toRelativeCalendar();
-  const timeString = () => nextDateTime().toFormat("HH:mm");
+	const nextDateTime = () =>
+		DateTime.fromMillis(props.next_lesson.start_ts).setLocale("fr");
+	const farString = () => nextDateTime().toRelativeCalendar();
+	const timeString = () => nextDateTime().toFormat("HH:mm");
 
-  return (
-    <>
-      <div class="flex items-center gap-2 px-4">
-        <MdiCalendar class="text-lg text-red" />
-        <p class="text-sm text-[rgb(240,240,240)]">
-          Le prochain est {farString()} à <span class="text-red font-medium">{timeString()}</span>
-        </p>
-      </div>
+	return (
+		<>
+			<div class="flex items-center gap-2 px-4">
+				<MdiCalendar class="text-lg text-red" />
+				<p class="text-sm text-[rgb(240,240,240)]">
+					Le prochain est {farString()} à{" "}
+					<span class="text-red font-medium">{timeString()}</span>
+				</p>
+			</div>
 
-      <div class="my-2 h-[1px] border-b border-b-[rgb(50,50,50)]" />
+			<div class="my-2 h-[1px] border-b border-b-[rgb(50,50,50)]" />
 
-      <p class="text-xs px-4 tablet:text-sm text-[rgb(240,240,240)]">
-        Prochain: {props.next_lesson.type} de <span class="text-red font-medium">{getLessonContentType(props.next_lesson)}</span> ({getLessonDescription(props.next_lesson)}) en <span class="text-red font-medium">{props.next_lesson.content.room}</span> avec {shortToFullTeacherName(props.next_lesson.content.teacher)?.name ?? props.next_lesson.content.teacher}
-      </p>
-    </>
-  );
+			<p class="text-xs px-4 tablet:text-sm text-[rgb(240,240,240)]">
+				Prochain: {props.next_lesson.type} de{" "}
+				<span class="text-red font-medium">
+					{getLessonDescription(props.next_lesson)}
+				</span>{" "}
+				en{" "}
+				<span class="text-red font-medium">
+					{props.next_lesson.content.room}
+				</span>{" "}
+				avec {props.next_lesson.content.teacher}
+			</p>
+		</>
+	);
 };
 
 const DoneForTodayWidget: Component<IDoneForTodayWidget> = (props) => {
-  return (
-    <div class="flex flex-col gap-1 py-3">
-      <div class="flex items-center gap-2 px-4">
-        <MdiCheck class="text-lg text-red" />
-        <p class="text-sm text-[rgb(240,240,240)]">
-          Les cours d'aujourd'hui sont terminés
-        </p>
-      </div>
+	return (
+		<div class="flex flex-col gap-1 py-3">
+			<div class="flex items-center gap-2 px-4">
+				<MdiCheck class="text-lg text-red" />
+				<p class="text-sm text-[rgb(240,240,240)]">
+					Les cours d'aujourd'hui sont terminés
+				</p>
+			</div>
 
-      <Show when={props.next_lesson}
-        fallback={
-          <div class="flex items-center gap-2 px-4">
-            <MdiCalendar class="text-lg text-red" />
-            <p class="text-sm text-[rgb(240,240,240)]">
-              Vous n'avez pas cours demain !
-            </p>
-          </div>
-        }
-      >
-        {next_lesson => (
-          <NextLessonPreview next_lesson={next_lesson()} />
-        )}
-      </Show>
-    </div>
-  );
+			<Show
+				when={props.next_lesson}
+				fallback={
+					<div class="flex items-center gap-2 px-4">
+						<MdiCalendar class="text-lg text-red" />
+						<p class="text-sm text-[rgb(240,240,240)]">
+							Vous n'avez pas cours demain !
+						</p>
+					</div>
+				}
+			>
+				{(next_lesson) => <NextLessonPreview next_lesson={next_lesson()} />}
+			</Show>
+		</div>
+	);
 };
 
 export default DoneForTodayWidget;
