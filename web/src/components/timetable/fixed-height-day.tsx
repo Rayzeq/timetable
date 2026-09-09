@@ -20,8 +20,6 @@ const FixedHeightDayTimetable: Component<{
 	dayIndex: number;
 }> = (props) => {
 	const day = () => getDayFromTimetable(props.header, props.dayIndex);
-	const windowSize = createWindowSize();
-	const lessonHeight = () => (windowSize.height - 48) / TIMETABLE_HOURS.length;
 
 	// Computes start/end indices, column packing, and overlap groups
 	const lessonLayouts = createMemo(() => {
@@ -135,12 +133,9 @@ const FixedHeightDayTimetable: Component<{
 
 			<div
 				class={[
-					"rounded-lg pt-6 mx-2 overflow-hidden relative",
+					"h-[calc(100vh-48px)] rounded-lg pt-6 mx-2 overflow-hidden relative",
 					props.isToday && "border-2 border-red",
 				]}
-				style={{
-					height: `${((TIMETABLE_HOURS.length - 1) / TIMETABLE_HOURS.length) * (windowSize.height - 48)}px`,
-				}}
 			>
 				<Show
 					when={!props.lessons.some((l) => l.type === "Férié")}
@@ -168,8 +163,6 @@ const FixedHeightDayTimetable: Component<{
 								{(item) => (
 									<Lesson
 										lesson={item.lesson}
-										top={item.start_index * lessonHeight()}
-										height={item.duration * lessonHeight()}
 										column={item.column}
 										totalColumns={item.totalColumns}
 										durationLength={item.duration}

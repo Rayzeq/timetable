@@ -28,7 +28,6 @@ import {
 	OngoingWidget,
 } from "~/components/widgets";
 import { createMediaQuery } from "~/primitives/media";
-import { createWindowSize } from "~/primitives/window-size";
 import { preferences, textColorOnBG } from "~/stores/preferences";
 import { now } from "~/stores/temporary";
 import type { ITimetableHeader } from "~/types/api";
@@ -73,7 +72,6 @@ const SwiperView: Component<{
 	 * the screen is larger or equal to a tablet screen.
 	 */
 	const isTablet = createMediaQuery("(min-width: 768px)");
-	const windowSize = createWindowSize();
 
 	// Only used for slide container - one-time snapshot on purpose.
 	const [activeDayIndex, setActiveDayIndex] = createSignal(
@@ -383,7 +381,7 @@ const SwiperView: Component<{
 				</div>
 			</div>
 
-			<main class="pt-6">
+			<main class="pt-6 pb-3">
 				<Show when={!isTablet()}>
 					<div class="flex items-center justify-between gap-2 mb-6 px-4">
 						<div class="flex flex-col flex-shrink-0">
@@ -477,21 +475,19 @@ const SwiperView: Component<{
 							/>
 						</Show>
 
-						<div class="absolute top-12 left-0 right-0 pointer-events-none">
+						{/* CSS-positioned hour lines */}
+						<div class="absolute top-12 bottom-3 left-0 right-0 pointer-events-none">
 							<For each={TIMETABLE_HOURS}>
 								{(hour, hour_index) => (
 									<div
-										class="absolute w-full flex items-center gap-2"
+										class="absolute w-full flex items-center gap-2 -translate-y-1/2"
 										style={{
-											top:
-												(hour_index() * (windowSize.height - 48)) /
-													TIMETABLE_HOURS.length +
-												"px",
+											top: `${(hour_index() / (TIMETABLE_HOURS.length - 1)) * 100}%`,
 										}}
 									>
 										<p
 											class={[
-												"text-sm text-right pl-4 leading-0 w-[50px] shrink-0",
+												"text-sm text-right pl-4 leading-none w-[50px] shrink-0",
 												hour_index() % 2 === 0
 													? "text-[rgb(200,200,200)]"
 													: "text-[rgb(140,140,140)] opacity-20",
