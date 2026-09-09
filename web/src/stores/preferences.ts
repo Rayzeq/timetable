@@ -4,12 +4,10 @@ import { safelyGetInLocalStorage } from "~/utils/localstorage";
 
 interface UserCustomization {
   primary_color?: string;
-  use_fixed_height?: boolean;
 }
 
 export const DEFAULT_USER_CUSTOMIZATION: Required<UserCustomization> = {
   primary_color: "255, 66, 66",
-  use_fixed_height: false,
 };
 
 export const [preferences, setPreferences] = createStore({

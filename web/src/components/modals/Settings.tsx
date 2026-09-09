@@ -24,25 +24,6 @@ const PRESET_COLORS: Array<string> = [
   "230, 230, 230",
 ];
 
-const ToggleSwitch: Component<{
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}> = (props) => (
-  <div class="flex items-center justify-between mt-2">
-    <p class="mr-1.5 text-[rgb(220,220,220)] select-none">{props.label}</p>
-    <button
-      type="button"
-      role="switch"
-      aria-checked={props.checked ? "true" : "false"}
-      class={["inline-flex items-center h-6 w-11 rounded-full px-.5 transition-colors", props.checked ? "bg-red" : "bg-[rgb(48,48,48)]"]}
-      onClick={() => props.onChange(!props.checked)}
-    >
-      <span class={["h-5 w-5 rounded-full bg-white transition-transform", props.checked && "transform translate-x-[calc(100%-1px)]"]} />
-    </button>
-  </div>
-);
-
 export const SettingsModal: Component<{
   open: boolean;
   setOpen: Setter<boolean>;
@@ -131,23 +112,6 @@ export const SettingsModal: Component<{
           </div>
 
           <p class="text-[rgb(190,190,190)] text-xs mt-1.5">Choisissez une couleur prédéfinie ou la vôtre avec le bouton "+".</p>
-        </section>
-
-        <section>
-          <h3 class="text-[rgb(240,240,240)] text-[18px]">Vue de l'EDT</h3>
-
-          <ToggleSwitch
-            label="Alignement sur les heures"
-            checked={getUserCustomizationKey("use_fixed_height")}
-            onChange={(value) =>
-              setUserCustomization({
-                ...preferences.customization,
-                use_fixed_height: value,
-              })
-            }
-          />
-
-          <p class="text-[rgb(190,190,190)] text-xs mt-1.5">Le positionnement des cours sur l'emploi du temps sera aligné sur les heures.</p>
         </section>
       </div>
 
