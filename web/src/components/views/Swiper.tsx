@@ -17,7 +17,6 @@ import MdiLoading from "~icons/mdi/loading";
 import MdiHeart from "~icons/mdi/heart";
 import MdiCheck from "~icons/mdi/check";
 import MdiCog from "~icons/mdi/cog";
-import MdiTableEye from "~icons/mdi/table-eye";
 
 import MobileDayTimetable from "~/components/timetable/relative-day";
 import FixedHeightDayTimetable from "~/components/timetable/fixed-height-day";
@@ -34,7 +33,7 @@ import {
   type IOngoingWidget
 } from "~/components/widgets";
 
-import { preferences, getUserYear, getUserCustomizationKey, textColorOnBG } from "~/stores/preferences";
+import { preferences, getUserCustomizationKey, textColorOnBG } from "~/stores/preferences";
 import { now } from "~/stores/temporary";
 
 import { getGreeting, getSmolDayString } from "~/utils/dates";
@@ -85,6 +84,7 @@ const SwiperView: Component<{
   // Returns `undefined` when loading.
   const widgetContent = createMemo(() => getWidgetContent({
     currentWeekLessons: props.currentWeekLessons,
+    currentWeekHeader: props.currentWeekHeader,
     nextWeekLessons: props.nextWeekLessons,
     nextWeekHeader: props.nextWeekHeader
   }));
@@ -92,28 +92,6 @@ const SwiperView: Component<{
   const vacationRemaining = () => props.header?.start_date
     ? DateTime.fromISO(props.header.start_date).setLocale("fr").toRelative()
     : "(calcul en cours...)";
-
-  const [pdfMenuOpen, setPdfMenuOpen] = createSignal(false);
-  const [pdfMenuContent, setPdfMenuContent] = createSignal<HTMLElement>();
-  const pdfMenuMounted = createPresence(pdfMenuOpen, () => [pdfMenuContent()]);
-
-  // the official pdfs exist at three levels of detail.
-  const pdfMenuEntries = () => {
-    if (!props.header) return [];
-
-    const year = `A${getUserYear()}`;
-    const group = `G${preferences.main_group}`;
-    // the upstream directories are lowercase - only the display name is not.
-    const subgroup = `${group}${preferences.sub_group === 0 ? "a" : "b"}`;
-    const base = `https://edt-iut-info.unilim.fr/edt/${year}`;
-    const week = `S${props.header.week_number}`;
-
-    return [
-      { label: "EDT de la promo", name: year, url: `${base}/${year}_${week}.pdf` },
-      { label: "EDT du groupe", name: group, url: `${base}/${group}/${group}_${week}.pdf` },
-      { label: "EDT du sous-groupe", name: subgroup.toUpperCase(), url: `${base}/${subgroup}/${subgroup}_${week}.pdf` }
-    ];
-  };
 
   const goToPreviousWeek = () => {
     // prevent to go into negative weeks
@@ -154,6 +132,8 @@ const SwiperView: Component<{
 
   createEffect(() => swiperInstanceRef(), (ref) => {
     if (!ref) return;
+
+    ref.initialize();
 
     const slideHandler = (evt: Event) => {
       const [{ isEnd, isBeginning }, progress] = (evt as Event & { detail: [instance: Swiper, progress: number]; }).detail;
@@ -256,43 +236,8 @@ const SwiperView: Component<{
           <p class="text-base sm:text-xl font-medium">
             {getGreeting()}
           </p>
-          <p class="text-xs sm:text-sm opacity-80">
-            Vous êtes en G{preferences.main_group}{preferences.sub_group === 0 ? "A" : "B"}.
-          </p>
         </div>
         <div class="flex gap-2">
-          <a href="/rooms" class="flex items-center justify-center p-2">
-            <MdiTableEye class="text-lg" />
-          </a>
-
-          <Show when={props.header && typeof props.lessons !== "undefined"}>
-            <DropdownMenu placement="bottom-end" gutter={4}
-              open={pdfMenuOpen()}
-              onOpenChange={setPdfMenuOpen}
-              forceMount={pdfMenuMounted()}
-            >
-              <DropdownMenu.Trigger class="flex items-center justify-center p-2" aria-label="Télécharger l'EDT en PDF">
-                <MdiFilePdfBox class="text-lg" />
-              </DropdownMenu.Trigger>
-
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content ref={setPdfMenuContent}
-                  class="z-50 w-60 py-1 bg-[rgb(32,32,32)] rounded-lg shadow-xl text-[rgb(220,220,220)] outline-none origin-[var(--kb-menu-content-transform-origin)] animate-kb-scale"
-                >
-                  <For each={pdfMenuEntries()}>
-                    {(entry) => (
-                      <DropdownMenu.Item as="a" href={entry.url} target="_blank" rel="noopener"
-                        class="flex items-center justify-between gap-4 px-4 py-2 text-sm outline-none cursor-pointer data-[highlighted]:bg-[rgb(42,42,42)]"
-                      >
-                        {entry.label}
-                        <span class="text-red font-medium">{entry.name}</span>
-                      </DropdownMenu.Item>
-                    )}
-                  </For>
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu>
-          </Show>
           <Show when={props.header && typeof props.lessons !== "undefined"}>
             <button type="button"
               class="flex items-center justify-center p-2"

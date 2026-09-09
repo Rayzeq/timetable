@@ -31,7 +31,7 @@ const MobileDayTimetable: Component<{
 
   return (
     <div class="w-full relative pt-6">
-      <div class="absolute top-3 left-0 right-0">
+      <div class="absolute top-3 left-0 right-0 z-20">
         <div class="w-fit mx-auto bg-red px-4 py-1 rounded-full">
           <p class={["text-sm", { "font-medium": textColorOnBG() === "black" }]}
             style={{ color: textColorOnBG() }}
@@ -41,27 +41,36 @@ const MobileDayTimetable: Component<{
         </div>
       </div>
 
-      <div class={["bg-[rgb(21,21,21)] rounded-lg py-6 mx-4", props.isToday && "border-2 border-red"]}>
-        <For each={props.lessons} fallback={
-          <div class="flex flex-col gap-2 items-center pt-4">
-            <MdiCheck class="text-2xl text-[rgb(240,240,240)]" />
-            <p class="text-[rgb(200,200,200)]">
-              Pas de cours !
-            </p>
+      <div class={["bg-[rgb(21,21,21)] rounded-lg py-6 mx-4 relative", props.isToday && "border-2 border-red"]}>
+        <Show when={props.lessons.some(l => l.type === "Férié")}
+          fallback={
+            <For each={props.lessons} fallback={
+              <div class="flex flex-col gap-2 items-center pt-4">
+                <MdiCheck class="text-2xl text-[rgb(240,240,240)]" />
+                <p class="text-[rgb(200,200,200)]">
+                  Pas de cours !
+                </p>
+              </div>
+            }>
+              {(lesson, lessonIndex) => (
+                <MobileDayTimetableLesson
+                  lesson={lesson}
+                  is_last_lesson={lessonIndex() === props.lessons.length - 1}
+                  // We check if the lesson is the first one of the day or not.
+                  // If yes, give `undefined` directly.
+                  lesson_before={lessonIndex() !== 0 ? props.lessons[lessonIndex() - 1] : undefined}
+                />
+              )}
+            </For>
+          }
+        >
+          <div class="flex flex-col gap-2 items-center justify-center py-10 px-4 text-center">
+            <p class="text-lg font-medium text-red">Jour férié 🎉</p>
+            <p class="text-sm text-[rgb(190,190,190)]">Aucun cours aujourd'hui (férié).</p>
           </div>
-        }>
-          {(lesson, lessonIndex) => (
-            <MobileDayTimetableLesson
-              lesson={lesson}
-              is_last_lesson={lessonIndex() === props.lessons.length - 1}
-              // We check if the lesson is the first one of the day or not.
-              // If yes, give `undefined` directly.
-              lesson_before={lessonIndex() !== 0 ? props.lessons[lessonIndex() - 1] : undefined}
-            />
-          )}
-        </For>
+        </Show>
 
-        <Show when={props.isToday && props.lessons.length > 0 && dayIsDone()}>
+        <Show when={props.isToday && props.lessons.length > 0 && dayIsDone() && !props.lessons.some(l => l.type === "Férié")}>
           <div class="flex p-4 gap-2 items-center justify-center text-red bg-red/15 mt-2">
             <MdiCheck class="text-xl" />
             <p>La journée est terminée !</p>

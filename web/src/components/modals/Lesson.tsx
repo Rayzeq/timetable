@@ -4,7 +4,7 @@ import type { Component } from "solid-js";
 import { Modal } from "~/components/modals";
 import { getPersonalNotesForID, setPersonalNotesForID } from "~/stores/notes";
 import type { ITimetableLesson } from "~/types/api";
-import { getLessonDescription, getLessonContentType, getFullLessonContentType, makeLessonUniqueID } from "~/utils/lessons";
+import { getLessonContentType, getFullLessonContentType, makeLessonUniqueID } from "~/utils/lessons";
 import { shortToFullTeacherName } from "~/utils/teachers";
 
 import MdiClock from "~icons/mdi/clock";
@@ -21,16 +21,16 @@ export const setLessonModalData = (data: ITimetableLesson) => {
 };
 
 const Field: Component<{ title: string, value: string, valueHref?: string }> = (props) => (
-  <div class="flex items-center gap-4 justify-between py-3 px-5">
-    <p class="text-[rgb(210,210,210)]">
+  <div class="flex items-start gap-4 justify-between py-3 px-5">
+    <p class="text-[rgb(210,210,210)] flex-shrink-0">
       {props.title}
     </p>
     <Show when={props.valueHref} fallback={
-      <p class="text-[rgb(230,230,230)] truncate">
+      <p class="text-[rgb(230,230,230)] text-right break-words flex-1">
         {props.value}
       </p>
     }>
-      <a href={props.valueHref} class="text-[rgb(230,230,230)] border-[rgb(220,220,220)] truncate border-b hover:border-white">
+      <a href={props.valueHref} class="text-[rgb(230,230,230)] text-right border-[rgb(220,220,220)] border-b hover:border-white break-words flex-1">
         {props.value}
       </a>
     </Show>
@@ -67,16 +67,22 @@ const LessonModal: Component = () => {
 
               <div class="flex flex-col divide-y divide-[rgb(69,69,69)] bg-[rgb(38,38,38)] rounded-lg">
                 <Field
-                  title="Description"
-                  value={getLessonDescription(lesson())}
+                  title="Matière"
+                  value={lesson().content.lesson_name || getLessonContentType(lesson())}
                 />
+                <Show when={lesson().content.description}>
+                  <Field
+                    title="Description"
+                    value={lesson().content.description!}
+                  />
+                </Show>
                 <Field
                   title="Type de cours"
                   value={getFullLessonContentType(lesson())}
                 />
                 <Field
-                  title="Ressource"
-                  value={getLessonContentType(lesson())}
+                  title="Groupe(s)"
+                  value={lesson().content.group || "Tous groupes"}
                 />
                 <Field
                   title="Enseignant(e)"

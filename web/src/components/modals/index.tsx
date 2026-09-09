@@ -34,7 +34,7 @@ export const Modal: ParentComponent<{
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-auto">
           <Dialog.Content ref={setContent}
             onCloseAutoFocus={() => opener?.focus({ preventScroll: true })}
-            class="bg-[rgb(32,32,32)] rounded-lg max-w-[450px] w-full my-auto outline-none animate-kb-scale"
+            class="bg-[rgb(32,32,32)] bg-solid rounded-lg max-w-[450px] w-full my-auto outline-none animate-kb-scale shadow-2xl"
           >
             <div class="flex justify-between items-center mb-2 border-b border-b-[rgb(90,90,90)] p-4 text-[rgb(220,220,220)]">
               <Dialog.Title class="text-[20px] font-medium">

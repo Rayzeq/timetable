@@ -1,6 +1,7 @@
 import type { ITimetableHeader } from "~/types/api";
 import type { IClientLesson } from "~/types/client";
 import { now } from "~/stores/temporary";
+import { DateTime } from "luxon";
 
 import type { IDoneForTodayWidget } from "./DoneForToday";
 import type { IDoneForWeekWidget } from "./DoneForWeek";
@@ -29,7 +30,8 @@ export type WidgetContent = (
 export const getWidgetContent = (data: {
   // Timetable of the current week (from today)
   currentWeekLessons?: IClientLesson[]
-  // Timetable of the next week (+1 from current week)
+  currentWeekHeader?: ITimetableHeader;
+  // Timetable of the next week
   nextWeekLessons?: IClientLesson[];
   nextWeekHeader?: ITimetableHeader;
 }): WidgetContent | undefined => {
@@ -122,10 +124,17 @@ export const getWidgetContent = (data: {
       loading: true
     };
 
-    const currentNextWeekNumber = n.plus({ weeks: 1 }).weekNumber;
+    let is_vacation = false;
+    if (data.currentWeekHeader && data.nextWeekHeader) {
+      const endCurrent = DateTime.fromISO(data.currentWeekHeader.end_date);
+      const startNext = DateTime.fromISO(data.nextWeekHeader.start_date);
+      const diffDays = startNext.diff(endCurrent, "days").days;
+      if (diffDays > 7) {
+        is_vacation = true;
+      }
+    }
 
-    // check if the week requested is really the one coming next current week.
-    if (currentNextWeekNumber === data.nextWeekHeader.week_number_in_year) {
+    if (!is_vacation) {
       return {
         type: "DONE_FOR_WEEK",
         loading: false,

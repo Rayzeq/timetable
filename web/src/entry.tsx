@@ -20,6 +20,10 @@ import { rgbToHex } from "~/utils/colors";
 import Home from "./routes/index";
 import Error404 from "./routes/404";
 
+// Synchronously set custom color on root before render to prevent monochrome flash on mobile
+const initialColor = getUserCustomizationKey("primary_color");
+document.documentElement.style.setProperty("--custom-color", `rgb(${initialColor})`);
+
 const Router = createRouter({
   routes: [
     defineRoute({ path: "/", component: Home }),
@@ -38,7 +42,7 @@ render(() => {
   });
 
   createEffect(() => [primaryColor(), primaryColorHEX()] as const, ([color, hex]) => {
-    const root = document.querySelector(":root") as HTMLElement;
+    const root = document.documentElement;
     root.style.setProperty("--custom-color", `rgb(${color})`);
 
     document.querySelector('meta[name="theme-color"]')
