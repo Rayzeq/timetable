@@ -37,6 +37,7 @@ async fn shutdown_signal() {
 }
 
 fn failure(status: StatusCode, message: &str) -> Response {
+    tracing::error!("{message}");
     (
         status,
         Json(json!({ "success": false, "message": message })),
