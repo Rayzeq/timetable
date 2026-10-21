@@ -34,6 +34,7 @@ const Page: Component = () => {
     try {
       setCurrentlyInVacation(false);
       await fetchAndProcessTimetable();
+      setError(null);
 
       const currentWeekNumber = await getDayWeekNumber(today);
       setCurrentWeekNumber(currentWeekNumber);
@@ -56,7 +57,7 @@ const Page: Component = () => {
           }
         }
         setCurrentWeekNumber(-1);
-        setError("Erreur d'authentification ou serveur injoignable. Vérifiez vos identifiants dans les paramètres.");
+        setError(error.message);
         return -1;
       }
 
@@ -99,7 +100,14 @@ const Page: Component = () => {
   createEffect(
     () => [preferences.username, preferences.password] as const,
     () => {
-      refreshCurrentWeekNumber();
+      (async () => {
+        const weekNumber = await refreshCurrentWeekNumber();
+        // Credentials were probably just filled in: show the timetable if the
+        // currently selected week is not part of the fetched data.
+        if (weekNumber > 0 && !getTemporaryTimetablesStore(selectedWeekNumber())) {
+          setSelectedWeekNumber(weekNumber);
+        }
+      })();
     },
   );
 

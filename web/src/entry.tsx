@@ -13,6 +13,7 @@ import { getUserCustomizationKey } from "~/stores/preferences";
 
 import UpdaterModal from "~/components/modals/Updater";
 import LessonModal from "~/components/modals/Lesson";
+import CachedDataNotice from "~/components/CachedDataNotice";
 
 import { initializeNowRefresh } from "~/stores/temporary";
 import { rgbToHex } from "~/utils/colors";
@@ -57,6 +58,8 @@ render(() => {
           <LessonModal />
 
           {props.children}
+
+          <CachedDataNotice />
         </>
       )}
     </Router>

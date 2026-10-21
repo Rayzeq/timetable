@@ -16,6 +16,12 @@ export const [preferences, setPreferences] = createStore({
   customization: JSON.parse(safelyGetInLocalStorage("user_customization", "{}")) as UserCustomization,
 });
 
+/**
+ * Whether the user filled in both credentials.
+ * Used to avoid hitting the server with a request that is guaranteed to fail.
+ */
+export const hasCredentials = () => preferences.username.trim().length > 0 && preferences.password.length > 0;
+
 export const setUsername = (username: string) => {
   localStorage.setItem("username", username);
   setPreferences((state) => {

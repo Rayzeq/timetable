@@ -7,18 +7,31 @@ import type { ApiEvent, ApiEventsResponse, ITimetable, ITimetableHeader, ITimeta
 import type { IClientTimetable } from "~/types/client";
 import { APIError, APIErrorType } from "~/utils/errors";
 import { normalizeAndMergeLessons, normalizeTimetable } from "~/utils/lessons";
-import { preferences } from "./preferences";
+import { hasCredentials, preferences } from "./preferences";
 
 interface TimetablesStoreState {
   weeks: Record<number, IClientTimetable | undefined>;
   meta: ITimetableHeader[];
   lastUpdate: string;
+  /**
+   * Set when the last fetch failed and cached data is shown instead.
+   * `null` means the displayed data comes from a successful fetch.
+   */
+  cacheFallback: CacheFallbackReason | null;
 }
+
+/**
+ * Why the app had to fall back to the local cache:
+ * - `offline`: the request never reached the server (network error).
+ * - `server`: the server responded with an error (or an invalid payload).
+ */
+export type CacheFallbackReason = "offline" | "server";
 
 export const [timetablesStore, setTimetablesStore] = createStore<TimetablesStoreState>({
   weeks: {},
   meta: [],
   lastUpdate: "",
+  cacheFallback: null,
 });
 
 export const getTemporaryTimetablesStore = (week_number: number): IClientTimetable | null => {
@@ -181,31 +194,87 @@ const processTimetableJson = (json: { success: true; data: ApiEventsResponse }) 
   });
 };
 
+const setCacheFallback = (reason: CacheFallbackReason | null) => {
+  setTimetablesStore((state) => {
+    state.cacheFallback = reason;
+  });
+};
+
 export const fetchAndProcessTimetable = async (): Promise<void> => {
+  // Never hit the server without credentials: the request cannot succeed and
+  // a dedicated error message is more useful than a generic server error.
+  if (!hasCredentials()) {
+    setCacheFallback(null);
+    throw new APIError(APIErrorType.MISSING_CREDENTIALS);
+  }
+
+  let response: Response;
   try {
-    const response = await fetch("/api/timetable", {
+    response = await fetch("/api/timetable", {
       headers: {
         "x-username": preferences.username,
         "x-password": preferences.password,
       },
     });
-
-    if (!response.ok) {
-      throw new APIError(APIErrorType.NO_CACHE);
-    }
-
-    const json = (await response.json()) as { success: true; data: ApiEventsResponse };
-    await localforage.setItem("timetable-cache", json);
-    processTimetableJson(json);
   } catch (error) {
-    const cached = await localforage.getItem<{ success: true; data: ApiEventsResponse }>("timetable-cache");
-    if (cached) {
-      processTimetableJson(cached);
-      return;
-    }
-    if (error instanceof APIError) throw error;
+    console.error("[timetable]: the server could not be reached.", error);
+    if (await useCachedTimetable("offline")) return;
+    setCacheFallback(null);
     throw new APIError(APIErrorType.NO_CACHE);
   }
+
+  // A 304 means the cached response is still fresh, no need to display a warning.
+  if (response.status === 304) {
+    if (await useCachedTimetable(null)) return;
+  } else if (!response.ok) {
+    console.error(`[timetable]: the server responded with ${response.status}.`);
+    if (await useCachedTimetable("server")) return;
+    setCacheFallback(null);
+    throw new APIError(APIErrorType.NO_CACHE);
+  }
+
+  let json: { success: true; data: ApiEventsResponse };
+  try {
+    json = (await response.json()) as { success: true; data: ApiEventsResponse };
+  } catch (error) {
+    console.error("[timetable]: invalid response from the server.", error);
+    if (await useCachedTimetable("server")) return;
+    setCacheFallback(null);
+    throw new APIError(APIErrorType.NO_CACHE);
+  }
+
+  try {
+    await localforage.setItem("timetable-cache", json);
+  } catch (error) {
+    // Not being able to write the cache must not prevent displaying fresh data.
+    console.error("[timetable]: could not write to the cache.", error);
+  }
+
+  processTimetableJson(json);
+  setCacheFallback(null);
+};
+
+/**
+ * Processes the locally cached timetable instead of the remote one.
+ * @param reason - Why the cache is used, or `null` when the cache is known to
+ * be up-to-date (e.g. a 304 response).
+ * @returns `true` if a cached timetable was found and processed.
+ */
+const useCachedTimetable = async (reason: CacheFallbackReason | null): Promise<boolean> => {
+  let cached: { success: true; data: ApiEventsResponse } | null;
+
+  try {
+    cached = await localforage.getItem<{ success: true; data: ApiEventsResponse }>("timetable-cache");
+  } catch (error) {
+    console.error("[timetable]: could not read the cache.", error);
+    return false;
+  }
+
+  if (!cached) return false;
+
+  processTimetableJson(cached);
+  setCacheFallback(reason);
+  return true;
 };
 
 export const getDayWeekNumber = async (day: DateTime): Promise<number> => {
@@ -244,5 +313,6 @@ export const resetAppCache = async (): Promise<void> => {
     state.weeks = {};
     state.meta = [];
     state.lastUpdate = "";
+    state.cacheFallback = null;
   });
 };
