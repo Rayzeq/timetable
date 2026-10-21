@@ -18,6 +18,12 @@ interface TimetablesStoreState {
    * `null` means the displayed data comes from a successful fetch.
    */
   cacheFallback: CacheFallbackReason | null;
+  /**
+   * True while cached data is displayed and a server refresh is in flight.
+   * Gives the user feedback that the shown timetable is cached and being
+   * updated.
+   */
+  refreshingFromCache: boolean;
 }
 
 /**
@@ -32,6 +38,7 @@ export const [timetablesStore, setTimetablesStore] = createStore<TimetablesStore
   meta: [],
   lastUpdate: "",
   cacheFallback: null,
+  refreshingFromCache: false,
 });
 
 export const getTemporaryTimetablesStore = (week_number: number): IClientTimetable | null => {
@@ -200,14 +207,44 @@ const setCacheFallback = (reason: CacheFallbackReason | null) => {
   });
 };
 
-export const fetchAndProcessTimetable = async (): Promise<void> => {
-  // Never hit the server without credentials: the request cannot succeed and
-  // a dedicated error message is more useful than a generic server error.
-  if (!hasCredentials()) {
-    setCacheFallback(null);
-    throw new APIError(APIErrorType.MISSING_CREDENTIALS);
-  }
+const setRefreshingFromCache = (refreshing: boolean) => {
+  setTimetablesStore((state) => {
+    state.refreshingFromCache = refreshing;
+  });
+};
 
+type CachedTimetablePayload = { success: true; data: ApiEventsResponse };
+
+const readCachedTimetable = async (): Promise<CachedTimetablePayload | null> => {
+  try {
+    return await localforage.getItem<CachedTimetablePayload>("timetable-cache");
+  } catch (error) {
+    console.error("[timetable]: could not read the cache.", error);
+    return null;
+  }
+};
+
+/**
+ * Processes the locally cached timetable instead of the remote one.
+ * @param reason - Why the cache is used, or `null` when the cache is known to
+ * be up-to-date (e.g. a 304 response).
+ * @returns `true` if a cached timetable was found and processed.
+ */
+const useCachedTimetable = async (reason: CacheFallbackReason | null): Promise<boolean> => {
+  const cached = await readCachedTimetable();
+  if (!cached) return false;
+
+  processTimetableJson(cached);
+  setCacheFallback(reason);
+  setRefreshingFromCache(false);
+  return true;
+};
+
+/**
+ * Fetches the timetable from the server, falling back to the cache when the
+ * request fails.
+ */
+const fetchRemoteTimetable = async (): Promise<void> => {
   let response: Response;
   try {
     response = await fetch("/api/timetable", {
@@ -220,6 +257,7 @@ export const fetchAndProcessTimetable = async (): Promise<void> => {
     console.error("[timetable]: the server could not be reached.", error);
     if (await useCachedTimetable("offline")) return;
     setCacheFallback(null);
+    setRefreshingFromCache(false);
     throw new APIError(APIErrorType.NO_CACHE);
   }
 
@@ -230,18 +268,26 @@ export const fetchAndProcessTimetable = async (): Promise<void> => {
     console.error(`[timetable]: the server responded with ${response.status}.`);
     if (await useCachedTimetable("server")) return;
     setCacheFallback(null);
+    setRefreshingFromCache(false);
     throw new APIError(APIErrorType.NO_CACHE);
   }
 
-  let json: { success: true; data: ApiEventsResponse };
+  let json: CachedTimetablePayload;
   try {
-    json = (await response.json()) as { success: true; data: ApiEventsResponse };
+    json = (await response.json()) as CachedTimetablePayload;
   } catch (error) {
     console.error("[timetable]: invalid response from the server.", error);
     if (await useCachedTimetable("server")) return;
     setCacheFallback(null);
+    setRefreshingFromCache(false);
     throw new APIError(APIErrorType.NO_CACHE);
   }
+
+  // Display the fresh data before writing the cache, so the UI updates as
+  // soon as the response is received.
+  processTimetableJson(json);
+  setCacheFallback(null);
+  setRefreshingFromCache(false);
 
   try {
     await localforage.setItem("timetable-cache", json);
@@ -249,32 +295,56 @@ export const fetchAndProcessTimetable = async (): Promise<void> => {
     // Not being able to write the cache must not prevent displaying fresh data.
     console.error("[timetable]: could not write to the cache.", error);
   }
-
-  processTimetableJson(json);
-  setCacheFallback(null);
 };
 
 /**
- * Processes the locally cached timetable instead of the remote one.
- * @param reason - Why the cache is used, or `null` when the cache is known to
- * be up-to-date (e.g. a 304 response).
- * @returns `true` if a cached timetable was found and processed.
+ * Runs a remote refresh, reusing the request already in flight for the same
+ * credentials (the app can trigger several refreshes on startup).
  */
-const useCachedTimetable = async (reason: CacheFallbackReason | null): Promise<boolean> => {
-  let cached: { success: true; data: ApiEventsResponse } | null;
+let inFlightRemoteFetch: { key: string; promise: Promise<void> } | null = null;
 
-  try {
-    cached = await localforage.getItem<{ success: true; data: ApiEventsResponse }>("timetable-cache");
-  } catch (error) {
-    console.error("[timetable]: could not read the cache.", error);
-    return false;
+const refreshRemoteTimetable = (): Promise<void> => {
+  const key = `${preferences.username}\u0000${preferences.password}`;
+
+  if (inFlightRemoteFetch?.key === key) {
+    return inFlightRemoteFetch.promise;
   }
 
-  if (!cached) return false;
+  const promise = fetchRemoteTimetable().finally(() => {
+    if (inFlightRemoteFetch?.promise === promise) inFlightRemoteFetch = null;
+  });
 
-  processTimetableJson(cached);
-  setCacheFallback(reason);
-  return true;
+  inFlightRemoteFetch = { key, promise };
+  return promise;
+};
+
+export const fetchAndProcessTimetable = async (): Promise<void> => {
+  // Never hit the server without credentials: the request cannot succeed and
+  // a dedicated error message is more useful than a generic server error.
+  if (!hasCredentials()) {
+    setCacheFallback(null);
+    setRefreshingFromCache(false);
+    throw new APIError(APIErrorType.MISSING_CREDENTIALS);
+  }
+
+  // On first load, show cached data immediately instead of keeping the user
+  // on a loading screen while a slow server answers. The remote response is
+  // processed as soon as it arrives.
+  if (Object.keys(timetablesStore.weeks).length === 0) {
+    const cached = await readCachedTimetable();
+    if (cached) {
+      processTimetableJson(cached);
+      setCacheFallback(null);
+      setRefreshingFromCache(true);
+      void refreshRemoteTimetable().catch((error) => {
+        console.error("[timetable]: background refresh failed.", error);
+        setRefreshingFromCache(false);
+      });
+      return;
+    }
+  }
+
+  await refreshRemoteTimetable();
 };
 
 export const getDayWeekNumber = async (day: DateTime): Promise<number> => {
@@ -314,5 +384,6 @@ export const resetAppCache = async (): Promise<void> => {
     state.meta = [];
     state.lastUpdate = "";
     state.cacheFallback = null;
+    state.refreshingFromCache = false;
   });
 };
