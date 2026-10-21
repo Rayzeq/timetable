@@ -51,3 +51,13 @@ export interface ApiTimetableResponse {
   success: true;
   data: ApiEventsResponse;
 }
+
+/**
+ * Error payload returned by the API. `code` is a stable identifier the client
+ * can translate, while `message` is a diagnostic string meant for the logs.
+ */
+export interface ApiErrorResponse {
+  success: false;
+  code?: string;
+  message?: string;
+}

@@ -1,12 +1,16 @@
 import { createEvents } from "ics";
-import type { IClientTimetable } from "~/types/client";
+import type { IClientLesson } from "~/types/client";
 import { getLessonContentType, getLessonDescription } from "./lessons";
 
-export const generateICS = (
-	timetable: Pick<IClientTimetable, "header" | "lessons">,
-): void => {
+/**
+ * Exports every provided lesson to an ICS file. The caller is expected to pass
+ * the whole timetable (`getAllLessons()`), not just the displayed week.
+ */
+export const generateICS = (lessons: IClientLesson[]): void => {
+	if (lessons.length === 0) return;
+
 	const { error, value } = createEvents(
-		timetable.lessons.map((lesson) => {
+		lessons.map((lesson) => {
 			const start = new Date(lesson.start_date);
 			const end = new Date(lesson.end_date);
 
@@ -41,13 +45,14 @@ Avec ${lesson.content.teacher} en salle ${lesson.content.room}.
 
 	if (error || !value) {
 		alert(
-			"Une erreur s'est produit lors de la génération du fichier ICS, voir la console.",
+			"Une erreur s'est produite lors de la génération du fichier ICS, voir la console.",
 		);
 		console.error(error);
 		return;
 	}
 
-	const filename = `timetable_S${timetable.header.week_number}.ics`;
+	const date = new Date().toISOString().slice(0, 10);
+	const filename = `emploi_du_temps_${date}.ics`;
 	const file = new File([value], filename, { type: "text/calendar" });
 
 	const url = URL.createObjectURL(file);

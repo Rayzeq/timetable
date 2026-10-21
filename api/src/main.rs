@@ -9,7 +9,7 @@ use axum::{
 use serde_json::json;
 use tokio::net::TcpListener;
 
-use edt::CachedPayload;
+use edt::{CachedPayload, ErrorCode};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -36,11 +36,11 @@ async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
-fn failure(status: StatusCode, message: &str) -> Response {
-    tracing::error!("{message}");
+fn failure(status: StatusCode, code: &str, message: &str) -> Response {
+    tracing::error!("[{code}] {message}");
     (
         status,
-        Json(json!({ "success": false, "message": message })),
+        Json(json!({ "success": false, "code": code, "message": message })),
     )
         .into_response()
 }
@@ -93,15 +93,20 @@ async fn timetable_endpoint(headers: HeaderMap) -> Response {
     if username.is_empty() || password.is_empty() {
         return failure(
             StatusCode::BAD_REQUEST,
+            "MISSING_CREDENTIALS",
             "Username and password are required headers (x-username, x-password).",
         );
     }
 
     match edt::get_user_timetable(&username, &password).await {
         Ok(payload) => success(&headers, &payload),
-        Err(error) => failure(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            &format!("Server error: {error}"),
-        ),
+        Err(error) => {
+            let status = match error.code() {
+                ErrorCode::InvalidCredentials => StatusCode::UNAUTHORIZED,
+                ErrorCode::Upstream => StatusCode::BAD_GATEWAY,
+            };
+
+            failure(status, error.code().as_str(), &error.to_string())
+        }
     }
 }

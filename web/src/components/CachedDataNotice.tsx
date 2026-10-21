@@ -80,7 +80,7 @@ const CachedDataNotice: Component = () => {
                     {reason() === "offline" ? "Serveur injoignable" : "Mise à jour impossible"}
                   </p>
                   <p class="text-xs leading-snug">
-                    Affichage des données en cache, elles peuvent être obsolètes.
+                    {timetablesStore.cacheFallbackMessage ?? "Affichage des données en cache, elles peuvent être obsolètes."}
                   </p>
                 </div>
 

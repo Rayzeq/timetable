@@ -46,6 +46,8 @@ const SwiperView: Component<{
   // Timetable of the current week (from today)
   currentWeekLessons?: IClientLesson[];
   currentWeekHeader?: ITimetableHeader;
+  // Every lesson of every loaded week, used by the ICS export.
+  allLessons?: IClientLesson[];
   // Timetable of the next week (+1 from current week)
   nextWeekLessons?: IClientLesson[];
   nextWeekHeader?: ITimetableHeader;
@@ -62,9 +64,6 @@ const SwiperView: Component<{
    * the screen is larger or equal to a tablet screen.
    */
   const isTablet = createMediaQuery("(min-width: 768px)");
-
-  // Only used for slide container - one-time snapshot on purpose.
-  const [activeDayIndex, setActiveDayIndex] = createSignal(untrack(() => now().weekday - 1));
 
   // Returns `undefined` when loading.
   const widgetContent = createMemo(() =>
@@ -89,7 +88,6 @@ const SwiperView: Component<{
       swiperInstanceRef()!.swiper.slideTo(5, 0);
     }
 
-    setActiveDayIndex(5);
     props.setWeekNumber((curr) => curr - 1);
   };
 
@@ -99,7 +97,6 @@ const SwiperView: Component<{
       swiperInstanceRef()!.swiper.slideTo(0, 0);
     }
 
-    setActiveDayIndex(0);
     props.setWeekNumber((curr) => curr + 1);
   };
 
@@ -224,16 +221,13 @@ const SwiperView: Component<{
           <p class="text-base sm:text-xl font-medium">{getGreeting()}</p>
         </div>
         <div class="flex gap-2">
-          <Show when={props.header && typeof props.lessons !== "undefined"}>
+          <Show when={props.allLessons && props.allLessons.length > 0}>
             <button
               type="button"
               class="flex items-center justify-center p-2"
-              onClick={() =>
-                generateICS({
-                  header: props.header!,
-                  lessons: props.lessons!,
-                })
-              }
+              title="Exporter tout l'emploi du temps au format ICS"
+              aria-label="Exporter tout l'emploi du temps au format ICS"
+              onClick={() => generateICS(props.allLessons!)}
             >
               <MdiCalendar class="text-lg" />
             </button>
@@ -455,7 +449,7 @@ const SwiperView: Component<{
               ref={setSwiperInstanceRef}
               class="mx-0 tablet:(ml-16 mr-6) ml-16"
               grab-cursor={true}
-              initial-slide={activeDayIndex()}
+              initial-slide={untrack(() => now().weekday - 1)}
               slides-per-view={1}
               focusable-elements=".focusable-lesson-for-swiper"
               prop:breakpoints={{

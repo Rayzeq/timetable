@@ -28,12 +28,56 @@ pub struct CachedPayload {
     pub body: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorCode {
+    InvalidCredentials,
+    Upstream,
+}
+
+impl ErrorCode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidCredentials => "INVALID_CREDENTIALS",
+            Self::Upstream => "UPSTREAM_ERROR",
+        }
+    }
+}
+
 #[derive(Debug)]
-pub struct Error(String);
+pub struct Error {
+    code: ErrorCode,
+    message: String,
+}
+
+impl Error {
+    fn new(code: ErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+
+    /// The upstream server (or the network) misbehaved.
+    fn upstream(message: impl fmt::Display) -> Self {
+        Self::new(ErrorCode::Upstream, message.to_string())
+    }
+
+    /// CAS did not accept the supplied credentials.
+    fn invalid_credentials() -> Self {
+        Self::new(
+            ErrorCode::InvalidCredentials,
+            "CAS login failed: missing redirect location (check credentials?)",
+        )
+    }
+
+    pub const fn code(&self) -> ErrorCode {
+        self.code
+    }
+}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.message)
     }
 }
 
@@ -45,7 +89,7 @@ async fn fetch_events(
         .redirect(Policy::none())
         .cookie_store(true)
         .build()
-        .map_err(|e| Error(e.to_string()))?;
+        .map_err(Error::upstream)?;
 
     let login_url =
         "https://cas.univ-avignon.fr/cas/login?service=https://edt.univ-avignon.fr/login";
@@ -58,21 +102,21 @@ async fn fetch_events(
         )
         .send()
         .await
-        .map_err(|e| Error(e.to_string()))?;
+        .map_err(Error::upstream)?;
 
-    let html = resp.text().await.map_err(|e| Error(e.to_string()))?;
+    let html = resp.text().await.map_err(Error::upstream)?;
 
     let execution = {
         let document = scraper::Html::parse_document(&html);
-        let selector = scraper::Selector::parse("input[name='execution']")
-            .map_err(|e| Error(e.to_string()))?;
+        let selector =
+            scraper::Selector::parse("input[name='execution']").map_err(Error::upstream)?;
         document
             .select(&selector)
             .next()
-            .ok_or_else(|| Error("Execution token not found in CAS page".to_string()))?
+            .ok_or_else(|| Error::upstream("Execution token not found in CAS page"))?
             .value()
             .attr("value")
-            .ok_or_else(|| Error("Execution input has no value".to_string()))?
+            .ok_or_else(|| Error::upstream("Execution input has no value"))?
             .to_owned()
     };
 
@@ -95,16 +139,14 @@ async fn fetch_events(
         .form(&params)
         .send()
         .await
-        .map_err(|e| Error(e.to_string()))?;
+        .map_err(Error::upstream)?;
 
     let location = post_resp
         .headers()
         .get(reqwest::header::LOCATION)
-        .ok_or_else(|| {
-            Error("CAS login failed: missing redirect location (check credentials?)".to_string())
-        })?
+        .ok_or_else(Error::invalid_credentials)?
         .to_str()
-        .map_err(|e| Error(e.to_string()))?
+        .map_err(Error::upstream)?
         .to_owned();
 
     let _ = client
@@ -120,7 +162,7 @@ async fn fetch_events(
     let ticket = location
         .split("ticket=")
         .nth(1)
-        .ok_or_else(|| Error("Ticket not found in redirect location".to_string()))?;
+        .ok_or_else(|| Error::upstream("Ticket not found in redirect location"))?;
 
     let auth_url = "https://edt-api.univ-avignon.fr/api/auth/login";
     let auth_payload = serde_json::json!({
@@ -142,13 +184,13 @@ async fn fetch_events(
         .json(&auth_payload)
         .send()
         .await
-        .map_err(|e| Error(e.to_string()))?;
+        .map_err(Error::upstream)?;
 
-    let auth_json: serde_json::Value = auth_resp.json().await.map_err(|e| Error(e.to_string()))?;
+    let auth_json: serde_json::Value = auth_resp.json().await.map_err(Error::upstream)?;
     let token = auth_json
         .get("token")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| Error("Token not found in EDT auth response".to_string()))?;
+        .ok_or_else(|| Error::upstream("Token not found in EDT auth response"))?;
     let full_name = auth_json
         .get("user")
         .and_then(|v| v.as_object())
@@ -169,10 +211,9 @@ async fn fetch_events(
         )
         .send()
         .await
-        .map_err(|e| Error(e.to_string()))?;
+        .map_err(Error::upstream)?;
 
-    let events: UpstreamEventsResponse =
-        events_resp.json().await.map_err(|e| Error(e.to_string()))?;
+    let events: UpstreamEventsResponse = events_resp.json().await.map_err(Error::upstream)?;
 
     Ok((full_name.to_owned(), events))
 }
@@ -183,7 +224,7 @@ pub async fn get_user_timetable(username: &str, password: &str) -> Result<Cached
         name,
         events: events.results,
     })
-    .map_err(|e| Error(e.to_string()))?;
+    .map_err(Error::upstream)?;
     let etag = compute_etag(&body);
 
     Ok(CachedPayload { etag, body })

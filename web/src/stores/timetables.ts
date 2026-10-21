@@ -3,9 +3,17 @@ import { DateTime as LuxonDateTime } from "luxon";
 import { createStore } from "solid-js";
 import localforage from "localforage";
 
-import type { ApiEvent, ApiEventsResponse, ITimetable, ITimetableHeader, ITimetableLesson, LessonType } from "~/types/api";
-import type { IClientTimetable } from "~/types/client";
-import { APIError, APIErrorType } from "~/utils/errors";
+import type {
+  ApiErrorResponse,
+  ApiEvent,
+  ApiEventsResponse,
+  ITimetable,
+  ITimetableHeader,
+  ITimetableLesson,
+  LessonType,
+} from "~/types/api";
+import type { IClientLesson, IClientTimetable } from "~/types/client";
+import { APIError, apiErrorTypeFromCode, APIErrorType, getAPIErrorMessage } from "~/utils/errors";
 import { normalizeAndMergeLessons, normalizeTimetable } from "~/utils/lessons";
 import { hasCredentials, preferences } from "./preferences";
 
@@ -18,6 +26,11 @@ interface TimetablesStoreState {
    * `null` means the displayed data comes from a successful fetch.
    */
   cacheFallback: CacheFallbackReason | null;
+  /**
+   * Localized explanation of the last failed refresh, displayed next to the
+   * cached-data notice. `null` when there is no error to report.
+   */
+  cacheFallbackMessage: string | null;
   /**
    * True while cached data is displayed and a server refresh is in flight.
    * Gives the user feedback that the shown timetable is cached and being
@@ -38,6 +51,7 @@ export const [timetablesStore, setTimetablesStore] = createStore<TimetablesStore
   meta: [],
   lastUpdate: "",
   cacheFallback: null,
+  cacheFallbackMessage: null,
   refreshingFromCache: false,
 });
 
@@ -201,9 +215,10 @@ const processTimetableJson = (json: { success: true; data: ApiEventsResponse }) 
   });
 };
 
-const setCacheFallback = (reason: CacheFallbackReason | null) => {
+const setCacheFallback = (reason: CacheFallbackReason | null, message: string | null = null) => {
   setTimetablesStore((state) => {
     state.cacheFallback = reason;
+    state.cacheFallbackMessage = reason ? message : null;
   });
 };
 
@@ -230,14 +245,34 @@ const readCachedTimetable = async (): Promise<CachedTimetablePayload | null> => 
  * be up-to-date (e.g. a 304 response).
  * @returns `true` if a cached timetable was found and processed.
  */
-const useCachedTimetable = async (reason: CacheFallbackReason | null): Promise<boolean> => {
+const useCachedTimetable = async (
+  reason: CacheFallbackReason | null,
+  message: string | null = null,
+): Promise<boolean> => {
   const cached = await readCachedTimetable();
   if (!cached) return false;
 
   processTimetableJson(cached);
-  setCacheFallback(reason);
+  setCacheFallback(reason, message);
   setRefreshingFromCache(false);
   return true;
+};
+
+/**
+ * Reads the API error payload and maps its stable code to a localized error
+ * type. The diagnostic message is only logged: the UI must stay in French.
+ */
+const readErrorType = async (response: Response): Promise<APIErrorType> => {
+  try {
+    const payload = (await response.json()) as ApiErrorResponse;
+    if (payload?.message) {
+      console.error(`[timetable]: backend error: ${payload.message}`);
+    }
+    return apiErrorTypeFromCode(payload?.code);
+  } catch (error) {
+    console.error("[timetable]: the server did not return a JSON error payload.", error);
+    return APIErrorType.SERVER_ERROR;
+  }
 };
 
 /**
@@ -265,11 +300,12 @@ const fetchRemoteTimetable = async (): Promise<void> => {
   if (response.status === 304) {
     if (await useCachedTimetable(null)) return;
   } else if (!response.ok) {
-    console.error(`[timetable]: the server responded with ${response.status}.`);
-    if (await useCachedTimetable("server")) return;
+    const errorType = await readErrorType(response);
+    console.error(`[timetable]: the server responded with ${response.status} (${errorType}).`);
+    if (await useCachedTimetable("server", getAPIErrorMessage(errorType))) return;
     setCacheFallback(null);
     setRefreshingFromCache(false);
-    throw new APIError(APIErrorType.NO_CACHE);
+    throw new APIError(errorType);
   }
 
   let json: CachedTimetablePayload;
@@ -277,10 +313,10 @@ const fetchRemoteTimetable = async (): Promise<void> => {
     json = (await response.json()) as CachedTimetablePayload;
   } catch (error) {
     console.error("[timetable]: invalid response from the server.", error);
-    if (await useCachedTimetable("server")) return;
+    if (await useCachedTimetable("server", getAPIErrorMessage(APIErrorType.SERVER_ERROR))) return;
     setCacheFallback(null);
     setRefreshingFromCache(false);
-    throw new APIError(APIErrorType.NO_CACHE);
+    throw new APIError(APIErrorType.SERVER_ERROR);
   }
 
   // Display the fresh data before writing the cache, so the UI updates as
@@ -362,6 +398,16 @@ export const getDayWeekNumber = async (day: DateTime): Promise<number> => {
   return meta.week_number;
 };
 
+/**
+ * All the lessons of every loaded week, sorted chronologically. Used by the
+ * ICS export so it contains the whole timetable instead of a single week.
+ */
+export const getAllLessons = (): IClientLesson[] =>
+  Object.values(timetablesStore.weeks)
+    .filter((timetable): timetable is IClientTimetable => timetable !== undefined)
+    .flatMap((timetable) => timetable.lessons)
+    .sort((a, b) => a.start_ts - b.start_ts);
+
 export const getNextWeekNumber = (weekNumber: number): number | null => {
   const nextMeta = timetablesStore.meta.find((m) => m.week_number > weekNumber);
   return nextMeta ? nextMeta.week_number : null;
@@ -384,6 +430,7 @@ export const resetAppCache = async (): Promise<void> => {
     state.meta = [];
     state.lastUpdate = "";
     state.cacheFallback = null;
+    state.cacheFallbackMessage = null;
     state.refreshingFromCache = false;
   });
 };
