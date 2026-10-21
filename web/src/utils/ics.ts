@@ -1,6 +1,6 @@
 import { createEvents } from "ics";
 import type { IClientLesson } from "~/types/client";
-import { getLessonContentType, getLessonDescription } from "./lessons";
+import { getLessonDescription } from "./lessons";
 
 /**
  * Exports every provided lesson to an ICS file. The caller is expected to pass
@@ -15,14 +15,14 @@ export const generateICS = (lessons: IClientLesson[]): void => {
 			const end = new Date(lesson.end_date);
 
 			const content = getLessonDescription(lesson);
+			const teacher =
+				lesson.content.teacher && lesson.content.teacher !== "Inconnu"
+					? lesson.content.teacher
+					: undefined;
 
 			return {
-				title:
-					lesson.type + " - " + getLessonContentType(lesson) + " - " + content,
-				description: `
-${content}
-Avec ${lesson.content.teacher} en salle ${lesson.content.room}.
-      `.trim(),
+				title: `${lesson.type} - ${content}`,
+				description: teacher ? `Avec ${teacher}.` : undefined,
 
 				start: [
 					start.getFullYear(),
